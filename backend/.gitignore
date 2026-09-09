@@ -1,0 +1,73 @@
+# Dependencies
+
+node_modules/
+
+# Environment variables / secrets
+
+.env
+.env.*
+!.env.example
+
+# Logs
+
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Runtime data
+
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+
+coverage/
+.nyc_output/
+
+# Build / distribution
+
+dist/
+build/
+out/
+
+# Prisma generated client
+
+generated/prisma/
+
+# Prisma local/dev files
+
+.prisma/
+
+# OS files
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE / editors
+
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# AI coding assistants / agent files
+
+.agents/
+.claude/
+.windsurf/
+
+# Temporary files
+
+tmp/
+temp/
+*.tmp
+
+# Local database files
+
+*.db
+*.sqlite
+*.sqlite3
