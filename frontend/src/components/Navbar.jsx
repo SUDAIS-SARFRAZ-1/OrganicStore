@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ShoppingBag, User, Menu, X, Leaf, ChevronDown, ChevronRight, LogOut, LayoutDashboard } from 'lucide-react';
+import { ShoppingBag, User, Menu, X, ChevronDown, ChevronRight, LogOut, LayoutDashboard } from 'lucide-react';
 import { getCategories, DEFAULT_CATEGORIES } from '../services/categoryApi';
 import { getCart } from '../services/cartApi';
 import { useAuthStore } from '../store/authStore';
@@ -50,45 +50,72 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-xs">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-xs print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
             {/* Logo */}
-            <Link to="/" className="flex items-center gap-2 group">
-              <div className="w-10 h-10 rounded-full bg-[#6a9739]/10 flex items-center justify-center text-[#6a9739] group-hover:bg-[#6a9739] group-hover:text-white transition-colors duration-200">
-                <Leaf className="w-6 h-6" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-2xl font-bold tracking-tight text-gray-900 leading-none">
-                  Organic<span className="text-[#6a9739]">.</span>
-                </span>
-                <span className="text-[10px] tracking-widest text-gray-500 uppercase font-medium">
-                  Store
-                </span>
-              </div>
+            <Link to="/" className="flex items-center group">
+              <img
+                src="/logo.svg"
+                alt="Organic Store"
+                className="h-11 w-auto object-contain transition-transform duration-200 group-hover:scale-105"
+              />
             </Link>
 
-            {/* Desktop Navigation Links (Dynamic Categories driven by Database with resilient fallback) */}
-            <nav className="hidden xl:flex items-center gap-6 2xl:gap-8 text-sm">
-              <NavLink to="/shop" className={activeLinkClass}>
-                Everything
+            {/* Desktop Navigation Links */}
+            <nav className="hidden lg:flex items-center gap-7 text-sm font-medium">
+              <NavLink to="/" className={activeLinkClass}>
+                Home
               </NavLink>
 
-              {displayCategories.slice(0, 5).map((category) => (
-                <NavLink
-                  key={category.id || category.slug}
-                  to={`/category/${category.slug}`}
-                  className={activeLinkClass}
+              <NavLink to="/shop" className={activeLinkClass}>
+                Shop
+              </NavLink>
+
+              {/* Categories Dropdown on Hover */}
+              <div className="relative group py-2">
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 text-gray-700 group-hover:text-[#6a9739] transition-colors font-medium cursor-pointer"
                 >
-                  {category.name}
-                </NavLink>
-              ))}
+                  <span>Categories</span>
+                  <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-[#6a9739] group-hover:rotate-180 transition-transform duration-200" />
+                </button>
+
+                {/* Dropdown Menu */}
+                <div className="absolute top-full left-0 w-64 bg-white rounded-xl shadow-xl border border-gray-100 p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 transform translate-y-2 group-hover:translate-y-0">
+                  <div className="max-h-80 overflow-y-auto space-y-1">
+                    <Link
+                      to="/shop"
+                      className="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-[#6a9739] bg-[#6a9739]/10 hover:bg-[#6a9739]/20 transition-colors"
+                    >
+                      <span>Explore All Products</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Link>
+                    {displayCategories.map((category) => (
+                      <Link
+                        key={category.id || category.slug}
+                        to={`/category/${category.slug}`}
+                        className="flex items-center justify-between px-3 py-2 rounded-lg text-sm text-gray-700 hover:text-[#6a9739] hover:bg-[#f8f6f3] transition-colors"
+                      >
+                        <span className="font-medium">{category.name}</span>
+                        {category.productCount !== undefined && (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">
+                            {category.productCount}
+                          </span>
+                        )}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
 
               <NavLink to="/about" className={activeLinkClass}>
-                About
+                About Us
               </NavLink>
+
               <NavLink to="/contact" className={activeLinkClass}>
-                Contact
+                Contact Us
               </NavLink>
             </nav>
 
@@ -135,30 +162,42 @@ export default function Navbar() {
                   </button>
 
                   {/* Dropdown Menu */}
-                  <div className="absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 py-1.5 hidden group-hover:block transition-all">
+                  <div className="absolute right-0 mt-1 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 hidden group-hover:block transition-all">
                     <Link
                       to="/account/profile"
-                      className="block px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-[#6a9739]"
+                      className="block px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:text-[#6a9739]"
                     >
-                      My Account
+                      Profile Settings
                     </Link>
                     <Link
                       to="/account/orders"
-                      className="block px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-[#6a9739]"
+                      className="block px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:text-[#6a9739]"
                     >
-                      Orders
+                      My Orders
+                    </Link>
+                    <Link
+                      to="/account/addresses"
+                      className="block px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:text-[#6a9739]"
+                    >
+                      Saved Addresses
+                    </Link>
+                    <Link
+                      to="/account/wishlist"
+                      className="block px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:text-[#6a9739]"
+                    >
+                      Wishlist
                     </Link>
                     {user?.role === 'ADMIN' && (
                       <Link
                         to="/admin/dashboard"
-                        className="block px-4 py-2 text-xs text-[#6a9739] font-medium hover:bg-gray-50"
+                        className="block px-4 py-2 text-xs text-[#6a9739] font-bold hover:bg-gray-50 border-t border-gray-100 mt-1 pt-2"
                       >
                         Admin Dashboard
                       </Link>
                     )}
                     <button
                       onClick={logout}
-                      className="w-full text-left px-4 py-2 text-xs text-red-600 hover:bg-red-50 cursor-pointer"
+                      className="w-full text-left px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 cursor-pointer border-t border-gray-100 mt-1 pt-2"
                     >
                       Logout
                     </button>
@@ -177,7 +216,7 @@ export default function Navbar() {
               {/* Mobile / Tablet Menu Toggle Hamburger Button */}
               <button
                 onClick={() => setMobileMenuOpen(true)}
-                className="xl:hidden p-2 text-gray-700 hover:text-[#6a9739] cursor-pointer rounded-lg hover:bg-gray-50 transition-colors"
+                className="lg:hidden p-2 text-gray-700 hover:text-[#6a9739] cursor-pointer rounded-lg hover:bg-gray-50 transition-colors"
                 aria-label="Open Navigation Menu"
               >
                 <Menu className="w-6 h-6" />
@@ -189,7 +228,7 @@ export default function Navbar() {
 
       {/* Floating Slide-out Navigation Drawer for Mobile & Tablet screens */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 xl:hidden overflow-hidden">
+        <div className="fixed inset-0 z-50 lg:hidden overflow-hidden">
           {/* Backdrop Scrim */}
           <div
             onClick={() => setMobileMenuOpen(false)}
@@ -205,14 +244,9 @@ export default function Navbar() {
                 <Link
                   to="/"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-2"
+                  className="flex items-center"
                 >
-                  <div className="w-8 h-8 rounded-full bg-[#6a9739]/10 flex items-center justify-center text-[#6a9739]">
-                    <Leaf className="w-5 h-5" />
-                  </div>
-                  <span className="text-xl font-bold text-gray-900">
-                    Organic<span className="text-[#6a9739]">.</span>
-                  </span>
+                  <img src="/logo.svg" alt="Organic Store" className="h-9 w-auto object-contain" />
                 </Link>
 
                 <button
@@ -328,11 +362,32 @@ export default function Navbar() {
                     )}
 
                     <Link
+                      to="/account/profile"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="block px-3 py-1.5 text-xs text-gray-700 hover:text-[#6a9739] font-medium"
+                    >
+                      Profile Settings
+                    </Link>
+                    <Link
                       to="/account/orders"
                       onClick={() => setMobileMenuOpen(false)}
-                      className="block px-3 py-1.5 text-xs text-gray-700 hover:text-[#6a9739]"
+                      className="block px-3 py-1.5 text-xs text-gray-700 hover:text-[#6a9739] font-medium"
                     >
                       My Orders
+                    </Link>
+                    <Link
+                      to="/account/addresses"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="block px-3 py-1.5 text-xs text-gray-700 hover:text-[#6a9739] font-medium"
+                    >
+                      Saved Addresses
+                    </Link>
+                    <Link
+                      to="/account/wishlist"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="block px-3 py-1.5 text-xs text-gray-700 hover:text-[#6a9739] font-medium"
+                    >
+                      Wishlist
                     </Link>
 
                     <button

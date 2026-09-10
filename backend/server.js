@@ -9,6 +9,10 @@ const productRoutes = require('./src/routes/productRoutes');
 const cartRoutes = require('./src/routes/cartRoutes');
 const couponRoutes = require('./src/routes/couponRoutes');
 const orderRoutes = require('./src/routes/orderRoutes');
+const userRoutes = require('./src/routes/userRoutes');
+const reviewRoutes = require('./src/routes/reviewRoutes');
+const adminRoutes = require('./src/routes/adminRoutes');
+const paymentRoutes = require('./src/routes/paymentRoutes');
 const { publicRouter: contentPublicRoutes, adminRouter: contentAdminRoutes } = require('./src/routes/contentRoutes');
 const { errorHandler, notFoundHandler } = require('./src/middleware/errorHandler');
 
@@ -58,6 +62,10 @@ app.use('/api/products', productRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/coupons', couponRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api/home', contentPublicRoutes);
 app.use('/api/admin/home', contentAdminRoutes);
 

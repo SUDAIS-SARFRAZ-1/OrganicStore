@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" fill="none">
+  <!-- Soil Association Circular Motif -->
+  <g transform="translate(10, 10)">
+    <circle cx="30" cy="30" r="28" fill="#ffffff" stroke="#2e7d32" stroke-width="3"/>
+    <!-- Organic swirl tree -->
+    <path d="M30 12C20 12 12 20 12 30C12 40 20 48 30 48C40 48 48 40 48 30" stroke="#2e7d32" stroke-width="3" stroke-linecap="round" fill="none"/>
+    <path d="M30 20C24 20 20 24 20 30C20 36 24 40 30 40C36 40 40 36 40 30" stroke="#8bc34a" stroke-width="3" stroke-linecap="round" fill="none"/>
+    <circle cx="30" cy="30" r="3" fill="#2e7d32"/>
+  </g>
+  <!-- Typography -->
+  <text x="76" y="34" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="14" fill="#1b5e20" letter-spacing="0.5">SOIL ASSOCIATION</text>
+  <text x="76" y="50" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="12" fill="#6a9739" letter-spacing="2">ORGANIC</text>
+</svg>

@@ -310,6 +310,57 @@ async function deleteTestimonial(req, res, next) {
   }
 }
 
+/**
+ * ADMIN: Bulk update or reorder testimonials according to preference
+ * PUT /api/admin/home/testimonials
+ */
+async function updateHomeTestimonialsBulk(req, res, next) {
+  try {
+    const { testimonials } = req.body;
+    if (!Array.isArray(testimonials)) {
+      return res.status(400).json({ success: false, message: 'testimonials array is required.' });
+    }
+
+    const updates = testimonials.map((t, idx) => {
+      return prisma.testimonial.upsert({
+        where: { id: t.id || 'temp-id-' + idx },
+        update: {
+          authorName: t.authorName || 'Verified Customer',
+          authorRole: t.authorRole || null,
+          rating: parseInt(t.rating, 10) || 5,
+          content: t.content || '',
+          avatarUrl: t.avatarUrl || null,
+          sortOrder: t.sortOrder !== undefined ? parseInt(t.sortOrder, 10) : idx,
+          isActive: t.isActive !== undefined ? Boolean(t.isActive) : true,
+        },
+        create: {
+          authorName: t.authorName || 'Verified Customer',
+          authorRole: t.authorRole || null,
+          rating: parseInt(t.rating, 10) || 5,
+          content: t.content || '',
+          avatarUrl: t.avatarUrl || null,
+          sortOrder: t.sortOrder !== undefined ? parseInt(t.sortOrder, 10) : idx,
+          isActive: t.isActive !== undefined ? Boolean(t.isActive) : true,
+        },
+      });
+    });
+
+    await prisma.$transaction(updates);
+
+    const allTestimonials = await prisma.testimonial.findMany({
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    res.json({
+      success: true,
+      message: 'Testimonials updated successfully.',
+      testimonials: allTestimonials,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 // ─── ADMIN: Brand Logos ───────────────────────────────────────────
 
 /**
@@ -416,6 +467,7 @@ module.exports = {
   createTestimonial,
   updateTestimonial,
   deleteTestimonial,
+  updateHomeTestimonialsBulk,
   getAllBrandLogos,
   createBrandLogo,
   updateBrandLogo,

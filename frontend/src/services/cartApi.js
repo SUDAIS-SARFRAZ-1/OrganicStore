@@ -31,7 +31,7 @@ export async function getCart() {
       setGuestCartId(response.cart.id);
     }
     return response.cart;
-  } catch (error) {
+  } catch {
     // If backend is unavailable, return safe empty cart fallback
     return {
       id: getGuestCartId() || 'offline-cart',

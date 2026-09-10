@@ -9,7 +9,7 @@ export default function MiniCartDrawer() {
   const { isOpen, closeDrawer } = useCartDrawerStore();
   const queryClient = useQueryClient();
 
-  const { data: cart = { items: [], totalItems: 0, subtotal: 0 }, isLoading } = useQuery({
+  const { data: cart = { items: [], totalItems: 0, subtotal: 0 } } = useQuery({
     queryKey: ['cart'],
     queryFn: getCart,
     staleTime: 1000 * 30, // 30 seconds

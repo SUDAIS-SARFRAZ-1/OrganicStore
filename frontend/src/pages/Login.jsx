@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Leaf, Lock, Mail, ArrowRight, AlertCircle, ShoppingBag } from 'lucide-react';
-import { loginUser } from '../services/authApi';
+import { Leaf, Lock, Mail, ArrowRight, AlertCircle, ShoppingBag, RefreshCw, KeyRound, CheckCircle2 } from 'lucide-react';
+import { loginUser, resendOtpApi } from '../services/authApi';
 import { useAuthStore } from '../store/authStore';
 
 export default function Login() {
@@ -19,30 +19,56 @@ export default function Login() {
     password: '',
   });
   const [errorMessage, setErrorMessage] = useState('');
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
+  const [resendStatus, setResendStatus] = useState('');
 
   const loginMutation = useMutation({
     mutationFn: loginUser,
     onSuccess: (data) => {
       setAuth(data.user, data.token);
-      // Invalidate cart query so guest items merge into user cart on backend
       queryClient.invalidateQueries({ queryKey: ['cart'] });
       navigate(redirectUrl, { replace: true });
     },
     onError: (err) => {
-      setErrorMessage(err.message || 'Invalid email or password. Please try again.');
+      if (err.response?.data?.isUnverified) {
+        const email = err.response.data.email || formData.email.trim().toLowerCase();
+        setUnverifiedEmail(email);
+        setErrorMessage(err.response.data.message || 'Your account is not activated yet.');
+      } else {
+        setUnverifiedEmail('');
+        setErrorMessage(err.message || 'Invalid email or password. Please try again.');
+      }
+    },
+  });
+
+  const resendMutation = useMutation({
+    mutationFn: resendOtpApi,
+    onSuccess: (data) => {
+      setResendStatus(data.message || 'A fresh 6-digit verification code has been dispatched to your email.');
+      setTimeout(() => setResendStatus(''), 6000);
+    },
+    onError: (err) => {
+      setErrorMessage(err.message || 'Failed to dispatch verification code.');
     },
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setErrorMessage('');
+    setResendStatus('');
 
     if (!formData.email || !formData.password) {
-      setErrorMessage('Please fill in all fields.');
+      setErrorMessage('Please fill in both email and password.');
       return;
     }
 
     loginMutation.mutate(formData);
+  };
+
+  const handleResend = () => {
+    if (!unverifiedEmail) return;
+    setErrorMessage('');
+    resendMutation.mutate({ email: unverifiedEmail });
   };
 
   return (
@@ -77,13 +103,72 @@ export default function Login() {
         {/* Card Form */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-5">
           {errorMessage && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-xs text-red-700 font-medium">
-              <AlertCircle className="w-4 h-4 shrink-0" />
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 text-xs text-red-700 font-medium">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{errorMessage}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Unverified Account Action Box */}
+          {unverifiedEmail && (
+            <div className="p-4 bg-amber-50/90 border border-amber-200 rounded-xl space-y-3 text-xs">
+              <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                <KeyRound className="w-4 h-4 text-amber-700 shrink-0" />
+                <span>Activate Your Account</span>
+              </div>
+              <p className="text-amber-800 text-[11px] leading-relaxed">
+                Your account for <strong>{unverifiedEmail}</strong> requires email verification before signing in.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                <Link
+                  to={`/signup?email=${encodeURIComponent(unverifiedEmail)}&step=otp&redirect=${encodeURIComponent(redirectUrl)}`}
+                  className="w-full py-2 bg-[#6a9739] hover:bg-[#58802d] text-white rounded-lg text-xs font-bold transition-colors text-center shadow-xs flex items-center justify-center gap-1"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>Enter 6-Digit OTP</span>
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resendMutation.isPending}
+                  className="w-full py-2 bg-white hover:bg-amber-100/50 border border-amber-300 text-amber-900 rounded-lg text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-2xs"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${resendMutation.isPending ? 'animate-spin' : ''}`} />
+                  <span>{resendMutation.isPending ? 'Sending...' : 'Resend Code'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {resendStatus && (
+            <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-xs text-green-800 font-semibold">
+              <CheckCircle2 className="w-4 h-4 text-[#6a9739] shrink-0" />
+              <span>{resendStatus}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
+            {/* Dummy hidden inputs to absorb browser aggressive autofill */}
+            <input
+              type="text"
+              name="prevent_autofill_username"
+              tabIndex={-1}
+              aria-hidden="true"
+              className="hidden"
+              autoComplete="off"
+              readOnly
+            />
+            <input
+              type="password"
+              name="prevent_autofill_password"
+              tabIndex={-1}
+              aria-hidden="true"
+              className="hidden"
+              autoComplete="new-password"
+              readOnly
+            />
+
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
                 Email Address
@@ -92,10 +177,14 @@ export default function Login() {
                 <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="email"
+                  name="os_login_email"
                   required
+                  readOnly
+                  onFocus={(e) => { e.target.readOnly = false; }}
                   placeholder="name@example.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  autoComplete="off"
                   className="w-full pl-10 pr-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#6a9739] focus:bg-white transition-colors"
                 />
               </div>
@@ -111,10 +200,14 @@ export default function Login() {
                 <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="password"
+                  name="os_login_password"
                   required
+                  readOnly
+                  onFocus={(e) => { e.target.readOnly = false; }}
                   placeholder="••••••••"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  autoComplete="new-password"
                   className="w-full pl-10 pr-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#6a9739] focus:bg-white transition-colors"
                 />
               </div>

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" fill="none">
+  <!-- Outer Gold/Green Double Border -->
+  <circle cx="80" cy="80" r="76" fill="#f4fbf1" stroke="#6a9739" stroke-width="4"/>
+  <circle cx="80" cy="80" r="70" stroke="#8bc34a" stroke-width="2" stroke-dasharray="4 3"/>
+  
+  <!-- Leaf Graphics -->
+  <g transform="translate(80, 70)">
+    <path d="M0 -30C0 -30 -16 -12 -16 6C-16 15 -9 22 0 22C9 22 16 15 16 6C16 -12 0 -30 0 -30Z" fill="#6a9739"/>
+    <path d="M0 -20C0 -20 -10 -8 -10 4C-10 10 -5 15 0 15C5 15 10 10 10 4C10 -8 0 -20 0 -20Z" fill="#8bc34a"/>
+    <path d="M0 22V2" stroke="#ffffff" stroke-width="2"/>
+  </g>
+  
+  <!-- Curved Text Top & Bottom -->
+  <text x="80" y="32" text-anchor="middle" font-family="Arial, sans-serif" font-weight="900" font-size="12" fill="#2e7d32" letter-spacing="2">100% CERTIFIED</text>
+  <text x="80" y="118" text-anchor="middle" font-family="Arial, sans-serif" font-weight="900" font-size="16" fill="#1b5e20" letter-spacing="2">ORGANIC</text>
+  <text x="80" y="134" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="9" fill="#558b2f" letter-spacing="1">FRESH &amp; NATURAL</text>
+</svg>

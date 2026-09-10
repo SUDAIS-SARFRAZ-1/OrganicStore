@@ -25,7 +25,8 @@ function generateOrderNumber() {
 async function createOrder(req, res, next) {
   try {
     const userId = req.user.id;
-    const { shippingAddress, couponCode, notes } = req.body;
+    const { shippingAddress, couponCode, notes, paymentMethod } = req.body;
+    const resolvedMethod = paymentMethod === 'STRIPE' ? 'STRIPE' : 'COD';
 
     // Validate shipping address input (Rule 8)
     if (
@@ -140,19 +141,40 @@ async function createOrder(req, res, next) {
       const shippingFee = subtotal >= 1000 ? 0 : 150;
       const totalAmount = Math.round(Math.max(0, subtotal - discountAmount + shippingFee) * 100) / 100;
 
-      // 5. Create delivery Address record for this order
-      const address = await tx.address.create({
-        data: {
+      // 5. Find matching existing delivery Address or create a new one (prevents duplicate addresses)
+      const cleanRecipient = shippingAddress.recipientName.trim();
+      const cleanPhone = shippingAddress.phone.trim();
+      const cleanStreet = shippingAddress.street.trim();
+      const cleanCity = shippingAddress.city.trim();
+      const cleanPostal = shippingAddress.postalCode ? shippingAddress.postalCode.trim() : '00000';
+      const cleanCountry = shippingAddress.country ? shippingAddress.country.trim() : 'Pakistan';
+      const cleanState = shippingAddress.state ? shippingAddress.state.trim() : null;
+
+      let address = await tx.address.findFirst({
+        where: {
           userId,
-          recipientName: shippingAddress.recipientName.trim(),
-          phone: shippingAddress.phone.trim(),
-          street: shippingAddress.street.trim(),
-          city: shippingAddress.city.trim(),
-          state: shippingAddress.state ? shippingAddress.state.trim() : null,
-          postalCode: shippingAddress.postalCode ? shippingAddress.postalCode.trim() : '00000',
-          country: shippingAddress.country ? shippingAddress.country.trim() : 'Pakistan',
+          recipientName: { equals: cleanRecipient, mode: 'insensitive' },
+          street: { equals: cleanStreet, mode: 'insensitive' },
+          city: { equals: cleanCity, mode: 'insensitive' },
         },
       });
+
+      if (!address) {
+        const addressCount = await tx.address.count({ where: { userId } });
+        address = await tx.address.create({
+          data: {
+            userId,
+            recipientName: cleanRecipient,
+            phone: cleanPhone,
+            street: cleanStreet,
+            city: cleanCity,
+            state: cleanState,
+            postalCode: cleanPostal,
+            country: cleanCountry,
+            isDefault: addressCount === 0,
+          },
+        });
+      }
 
       // 6. Generate orderNumber and create Order record
       let orderNumber = generateOrderNumber();
@@ -173,7 +195,7 @@ async function createOrder(req, res, next) {
           totalAmount,
           couponId,
           status: 'PENDING',
-          paymentMethod: 'COD',
+          paymentMethod: resolvedMethod,
           paymentStatus: 'PENDING',
           notes: notes ? notes.trim() : null,
           items: {
@@ -182,7 +204,7 @@ async function createOrder(req, res, next) {
           payment: {
             create: {
               amount: totalAmount,
-              method: 'COD',
+              method: resolvedMethod,
               status: 'PENDING',
             },
           },
@@ -405,8 +427,455 @@ async function getOrderById(req, res, next) {
   }
 }
 
+/**
+ * GET /api/orders/admin/all (Admin only)
+ * Fetches all orders with pagination, status filter, and keyword search
+ */
+async function getAllOrders(req, res, next) {
+  try {
+    const { status, search, page = 1, limit = 15 } = req.query;
+
+    const take = parseInt(limit, 10) || 15;
+    const skip = (parseInt(page, 10) - 1) * take;
+
+    const where = {};
+
+    if (status && status !== 'ALL') {
+      where.status = status;
+    }
+
+    if (search && search.trim()) {
+      const q = search.trim();
+      where.OR = [
+        { orderNumber: { contains: q, mode: 'insensitive' } },
+        { user: { name: { contains: q, mode: 'insensitive' } } },
+        { user: { email: { contains: q, mode: 'insensitive' } } },
+        { address: { recipientName: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [orders, total] = await Promise.all([
+      prisma.order.findMany({
+        where,
+        include: {
+          user: { select: { id: true, name: true, email: true, phone: true } },
+          address: true,
+          payment: true,
+          items: {
+            select: {
+              id: true,
+              productName: true,
+              quantity: true,
+              unitPrice: true,
+              totalPrice: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      prisma.order.count({ where }),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      orders: orders.map((o) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        status: o.status,
+        subtotal: Number(o.subtotal),
+        discountAmount: Number(o.discountAmount),
+        shippingFee: Number(o.shippingFee),
+        totalAmount: Number(o.totalAmount),
+        paymentMethod: o.paymentMethod,
+        paymentStatus: o.paymentStatus,
+        notes: o.notes,
+        createdAt: o.createdAt,
+        updatedAt: o.updatedAt,
+        customer: o.user,
+        address: o.address,
+        payment: o.payment,
+        itemsCount: o.items.reduce((sum, item) => sum + item.quantity, 0),
+        items: o.items.map((i) => ({
+          id: i.id,
+          productName: i.productName,
+          quantity: i.quantity,
+          unitPrice: Number(i.unitPrice),
+          totalPrice: Number(i.totalPrice),
+        })),
+      })),
+      pagination: {
+        page: parseInt(page, 10),
+        limit: take,
+        total,
+        totalPages: Math.ceil(total / take),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /api/orders/admin/export (Admin only)
+ * Fetches all orders matching status/search for sheet export and packing slips (no pagination limit).
+ */
+async function exportOrdersForAdmin(req, res, next) {
+  try {
+    const { status, search } = req.query;
+    const where = {};
+
+    if (status && status !== 'ALL') {
+      where.status = status;
+    }
+
+    if (search && search.trim()) {
+      const q = search.trim();
+      where.OR = [
+        { orderNumber: { contains: q, mode: 'insensitive' } },
+        { user: { name: { contains: q, mode: 'insensitive' } } },
+        { user: { email: { contains: q, mode: 'insensitive' } } },
+        { address: { recipientName: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
+
+    const orders = await prisma.order.findMany({
+      where,
+      include: {
+        user: { select: { id: true, name: true, email: true, phone: true } },
+        address: true,
+        payment: true,
+        items: {
+          select: {
+            id: true,
+            productName: true,
+            quantity: true,
+            unitPrice: true,
+            totalPrice: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: orders.length,
+      orders: orders.map((o) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        status: o.status,
+        subtotal: Number(o.subtotal),
+        discountAmount: Number(o.discountAmount),
+        shippingFee: Number(o.shippingFee),
+        totalAmount: Number(o.totalAmount),
+        paymentMethod: o.paymentMethod,
+        paymentStatus: o.paymentStatus,
+        notes: o.notes,
+        createdAt: o.createdAt,
+        customer: o.user,
+        address: o.address,
+        payment: o.payment,
+        itemsCount: o.items.reduce((sum, item) => sum + item.quantity, 0),
+        items: o.items.map((i) => ({
+          id: i.id,
+          productName: i.productName,
+          quantity: i.quantity,
+          unitPrice: Number(i.unitPrice),
+          totalPrice: Number(i.totalPrice),
+        })),
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * PUT /api/orders/admin/:id/status (Admin only)
+ * Updates order status with inventory replenishment on cancellation
+ */
+async function updateOrderStatus(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid order status. Allowed values: ${validStatuses.join(', ')}`,
+      });
+    }
+
+    const existing = await prisma.order.findUnique({
+      where: { id },
+      include: { items: true, payment: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+
+    if (existing.status === 'CANCELLED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cancelled orders cannot be modified.',
+      });
+    }
+
+    if (existing.status === 'DELIVERED' && status !== 'DELIVERED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Completed and delivered orders cannot have their status reversed.',
+      });
+    }
+
+    // Execute status update with transaction if cancellation restores stock (Rule 5)
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      // If order is cancelled, return items back to product inventory
+      if (status === 'CANCELLED') {
+        for (const item of existing.items) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { increment: item.quantity } },
+          });
+        }
+
+        if (existing.payment) {
+          await tx.payment.update({
+            where: { id: existing.payment.id },
+            data: { status: 'FAILED' },
+          });
+        }
+      }
+
+      // If order marked DELIVERED and was COD PENDING, mark payment as PAID
+      if (status === 'DELIVERED' && existing.paymentMethod === 'COD' && existing.paymentStatus === 'PENDING') {
+        if (existing.payment) {
+          await tx.payment.update({
+            where: { id: existing.payment.id },
+            data: { status: 'PAID' },
+          });
+        }
+      }
+
+      return tx.order.update({
+        where: { id },
+        data: {
+          status,
+          ...(status === 'DELIVERED' && existing.paymentMethod === 'COD'
+            ? { paymentStatus: 'PAID' }
+            : {}),
+          ...(status === 'CANCELLED'
+            ? { paymentStatus: 'FAILED' }
+            : {}),
+        },
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          items: true,
+          payment: true,
+          address: true,
+        },
+      });
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Order #${updatedOrder.orderNumber} status updated to ${updatedOrder.status}.`,
+      order: updatedOrder,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * PUT /api/orders/:id/confirm-delivery
+ * Customer confirms they received their parcel, or Admin confirms delivery.
+ * In a Prisma transaction:
+ * - Updates status to DELIVERED
+ * - If paymentMethod === 'COD', marks payment as PAID on both Order and Payment
+ */
+async function confirmDelivery(req, res, next) {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    const existing = await prisma.order.findUnique({
+      where: { id },
+      include: { items: true, payment: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+
+    // Only owner of the order or Admin can confirm delivery
+    if (existing.userId !== userId && userRole !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to confirm delivery for this order.',
+      });
+    }
+
+    if (existing.status === 'DELIVERED') {
+      return res.status(200).json({
+        success: true,
+        message: 'Order delivery has already been confirmed.',
+        order: existing,
+      });
+    }
+
+    if (existing.status === 'CANCELLED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cancelled orders cannot be marked as delivered.',
+      });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      // If COD and payment was PENDING, mark payment as PAID
+      if (existing.paymentMethod === 'COD' && existing.paymentStatus === 'PENDING') {
+        if (existing.payment) {
+          await tx.payment.update({
+            where: { id: existing.payment.id },
+            data: { status: 'PAID' },
+          });
+        }
+      }
+
+      return tx.order.update({
+        where: { id },
+        data: {
+          status: 'DELIVERED',
+          ...(existing.paymentMethod === 'COD' && existing.paymentStatus === 'PENDING'
+            ? { paymentStatus: 'PAID' }
+            : {}),
+        },
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          items: true,
+          payment: true,
+          address: true,
+        },
+      });
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Delivery confirmed! Thank you for shopping with Organic Store.',
+      order: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * PUT /api/orders/:id/cancel
+ * Customer cancels their own order (allowed when PENDING or CONFIRMED), or Admin cancels.
+ * In a Prisma transaction:
+ * - Restores inventory stock for all products
+ * - Marks status CANCELLED and paymentStatus FAILED
+ */
+async function cancelOrder(req, res, next) {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    const existing = await prisma.order.findUnique({
+      where: { id },
+      include: { items: true, payment: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+
+    // Only owner of the order or Admin can cancel
+    if (existing.userId !== userId && userRole !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to cancel this order.',
+      });
+    }
+
+    if (existing.status === 'CANCELLED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Order is already cancelled.',
+      });
+    }
+
+    if (existing.status === 'DELIVERED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Delivered orders cannot be cancelled.',
+      });
+    }
+
+    // Customer can only cancel before parcel is in transit
+    if (userRole !== 'ADMIN' && (existing.status === 'PROCESSING' || existing.status === 'SHIPPED')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Your order is already being processed or shipped and cannot be cancelled directly. Please contact customer support.',
+      });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      // 1. Restore product inventory stock
+      for (const item of existing.items) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: { increment: item.quantity } },
+        });
+      }
+
+      // 2. Mark payment failed/cancelled
+      if (existing.payment) {
+        await tx.payment.update({
+          where: { id: existing.payment.id },
+          data: { status: 'FAILED' },
+        });
+      }
+
+      // 3. Update order
+      return tx.order.update({
+        where: { id },
+        data: {
+          status: 'CANCELLED',
+          paymentStatus: 'FAILED',
+        },
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          items: true,
+          payment: true,
+          address: true,
+        },
+      });
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Your order has been cancelled successfully.',
+      order: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   createOrder,
   getMyOrders,
   getOrderById,
+  getAllOrders,
+  exportOrdersForAdmin,
+  updateOrderStatus,
+  confirmDelivery,
+  cancelOrder,
 };

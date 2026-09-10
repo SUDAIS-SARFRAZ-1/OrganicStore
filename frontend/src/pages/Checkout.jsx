@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShieldCheck,
   Truck,
-  CheckCircle2,
   AlertCircle,
   ShoppingBag,
   ArrowLeft,
@@ -13,10 +12,12 @@ import {
   FileText,
   Leaf,
   Tag,
+  Lock,
 } from 'lucide-react';
 import { getCart } from '../services/cartApi';
 import { createOrder } from '../services/orderApi';
 import { validateCoupon } from '../services/couponApi';
+import { processDirectCardPayment } from '../services/paymentApi';
 import { useAuthStore } from '../store/authStore';
 
 export default function Checkout() {
@@ -44,10 +45,55 @@ export default function Checkout() {
   });
 
   const [notes, setNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('COD');
+  const [isRedirectingToStripe, setIsRedirectingToStripe] = useState(false);
+  const [cardDetails, setCardDetails] = useState({
+    cardholderName: user?.name || '',
+    cardNumber: '',
+    expiry: '',
+    cvc: '',
+  });
+
   const [couponCodeInput, setCouponCodeInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(location.state?.appliedCoupon || null);
   const [couponError, setCouponError] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+
+  const handleCardNumberChange = (e) => {
+    const raw = e.target.value.replace(/\D/g, '').slice(0, 16);
+    const formatted = raw.match(/.{1,4}/g)?.join(' ') || raw;
+    setCardDetails((prev) => ({ ...prev, cardNumber: formatted }));
+  };
+
+  const handleExpiryChange = (e) => {
+    let raw = e.target.value.replace(/\D/g, '').slice(0, 4);
+    if (raw.length >= 3) {
+      raw = raw.slice(0, 2) + '/' + raw.slice(2);
+    }
+    setCardDetails((prev) => ({ ...prev, expiry: raw }));
+  };
+
+  const handleCvcChange = (e) => {
+    const raw = e.target.value.replace(/\D/g, '').slice(0, 4);
+    setCardDetails((prev) => ({ ...prev, cvc: raw }));
+  };
+
+  const fillTestCard = () => {
+    setCardDetails({
+      cardholderName: shippingAddress.recipientName || user?.name || 'Organic Shopper',
+      cardNumber: '4242 4242 4242 4242',
+      expiry: '12/28',
+      cvc: '123',
+    });
+  };
+
+  // Check if redirected back due to Stripe cancellation
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('cancelled') === 'true') {
+      setErrorMessage('Online payment was interrupted. You can choose Cash on Delivery or retry Stripe payment below.');
+    }
+  }, [location.search]);
 
   // Coupon validation mutation
   const couponMutation = useMutation({
@@ -66,12 +112,36 @@ export default function Checkout() {
   // Order placement mutation (Rule 5 & 25)
   const orderMutation = useMutation({
     mutationFn: createOrder,
-    onSuccess: (newOrder) => {
+    onSuccess: async (newOrder) => {
       // Invalidate cart in React Query so cart badge resets to 0
       queryClient.invalidateQueries({ queryKey: ['cart'] });
+
+      if (paymentMethod === 'STRIPE') {
+        try {
+          setIsRedirectingToStripe(true);
+          const payRes = await processDirectCardPayment({
+            orderId: newOrder.id,
+            cardholderName: cardDetails.cardholderName,
+            cardNumber: cardDetails.cardNumber,
+            expiry: cardDetails.expiry,
+            cvc: cardDetails.cvc,
+          });
+
+          if (payRes?.order) {
+            navigate(`/order-success/${newOrder.orderNumber}`, { state: { order: payRes.order } });
+            return;
+          }
+        } catch (cardErr) {
+          setIsRedirectingToStripe(false);
+          setErrorMessage(cardErr.message || 'Card payment processing failed. Please check your card details.');
+          return;
+        }
+      }
+
       navigate(`/order-success/${newOrder.orderNumber}`, { state: { order: newOrder } });
     },
     onError: (err) => {
+      setIsRedirectingToStripe(false);
       setErrorMessage(err.message || 'Failed to place order. Please check your information.');
     },
   });
@@ -105,10 +175,31 @@ export default function Checkout() {
       return;
     }
 
+    if (paymentMethod === 'STRIPE') {
+      if (!cardDetails.cardholderName.trim()) {
+        setErrorMessage('Please enter the Cardholder Name on your debit/credit card.');
+        return;
+      }
+      const cleanNum = cardDetails.cardNumber.replace(/\s+/g, '');
+      if (cleanNum.length < 15) {
+        setErrorMessage('Please enter a valid 16-digit Card Number.');
+        return;
+      }
+      if (cardDetails.expiry.length < 5) {
+        setErrorMessage('Please enter Card Expiry Date (MM/YY).');
+        return;
+      }
+      if (cardDetails.cvc.length < 3) {
+        setErrorMessage('Please enter a valid 3-digit CVC security code.');
+        return;
+      }
+    }
+
     orderMutation.mutate({
       shippingAddress,
       couponCode: appliedCoupon?.code || null,
       notes: notes.trim() || null,
+      paymentMethod,
     });
   };
 
@@ -293,29 +384,176 @@ export default function Checkout() {
                 </div>
               </div>
 
-              {/* Payment Method Section (COD) */}
+              {/* Payment Method Section (COD vs Stripe) */}
               <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-6 space-y-4">
-                <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100">
-                  <CreditCard className="w-5 h-5 text-[#6a9739]" />
-                  <h2 className="text-base font-bold text-gray-900">Payment Method</h2>
+                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                  <div className="flex items-center gap-2.5">
+                    <CreditCard className="w-5 h-5 text-[#6a9739]" />
+                    <h2 className="text-base font-bold text-gray-900">Payment Method</h2>
+                  </div>
+                  <span className="text-[11px] font-semibold text-gray-400 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-[#6a9739]" /> 256-Bit Encrypted
+                  </span>
                 </div>
 
-                <div className="p-4 rounded-xl border-2 border-[#6a9739] bg-green-50/50 flex items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-gray-900">
-                        Cash on Delivery (COD)
-                      </span>
-                      <span className="px-2 py-0.5 rounded-full bg-[#6a9739] text-white text-[10px] font-bold">
-                        Default
-                      </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {/* Option 1: Cash on Delivery */}
+                  <div
+                    onClick={() => setPaymentMethod('COD')}
+                    className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+                      paymentMethod === 'COD'
+                        ? 'border-[#6a9739] bg-green-50/40 shadow-xs'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-gray-900">Cash on Delivery</span>
+                        </div>
+                        <span className="text-[10px] text-gray-500 block mt-0.5">Pay at doorstep</span>
+                      </div>
+                      <div
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 ${
+                          paymentMethod === 'COD'
+                            ? 'border-[#6a9739] bg-[#6a9739]'
+                            : 'border-gray-300 bg-white'
+                        }`}
+                      >
+                        {paymentMethod === 'COD' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
                     </div>
-                    <p className="text-xs text-gray-600 leading-relaxed">
-                      Pay with cash when your farm-fresh organic groceries arrive at your doorstep. No prepayment or credit card required.
+                    <p className="text-[11px] text-gray-600 leading-relaxed">
+                      Pay in cash when your fresh organic groceries arrive. Confirm receipt with delivery courier.
                     </p>
                   </div>
-                  <CheckCircle2 className="w-5 h-5 text-[#6a9739] shrink-0" />
+
+                  {/* Option 2: Online Payment (Stripe) */}
+                  <div
+                    onClick={() => setPaymentMethod('STRIPE')}
+                    className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+                      paymentMethod === 'STRIPE'
+                        ? 'border-[#6a9739] bg-green-50/40 shadow-xs'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-gray-900">Online Card (Stripe)</span>
+                          <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[9px] font-extrabold tracking-wider uppercase">
+                            Fast
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-gray-500 block mt-0.5">Debit / Credit Card</span>
+                      </div>
+                      <div
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 ${
+                          paymentMethod === 'STRIPE'
+                            ? 'border-[#6a9739] bg-[#6a9739]'
+                            : 'border-gray-300 bg-white'
+                        }`}
+                      >
+                        {paymentMethod === 'STRIPE' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-gray-600 leading-relaxed">
+                      Visa, MasterCard & UnionPay. Instant order confirmation with zero cash handling hassle.
+                    </p>
+                  </div>
                 </div>
+
+                {/* Option B: Embedded Card Inputs when STRIPE is selected */}
+                {paymentMethod === 'STRIPE' && (
+                  <div className="mt-4 p-5 rounded-xl border border-blue-200 bg-linear-to-b from-blue-50/50 to-white space-y-4">
+                    <div className="flex items-center justify-between gap-2 border-b border-blue-100 pb-3">
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="w-4 h-4 text-blue-600" />
+                        <span className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                          Debit / Credit Card Details
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={fillTestCard}
+                        className="text-[11px] font-semibold text-blue-700 bg-blue-100/80 hover:bg-blue-200 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
+                      >
+                        ⚡ Fill Demo Card
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                        Cardholder Name
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. John Doe"
+                        value={cardDetails.cardholderName}
+                        onChange={(e) =>
+                          setCardDetails((prev) => ({ ...prev, cardholderName: e.target.value }))
+                        }
+                        className="w-full px-3.5 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-[#6a9739] shadow-2xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                        Card Number
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="1234 5678 9012 3456"
+                          maxLength={19}
+                          value={cardDetails.cardNumber}
+                          onChange={handleCardNumberChange}
+                          className="w-full px-3.5 py-2 text-sm font-mono tracking-wider bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-[#6a9739] shadow-2xs"
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-xs text-gray-400 font-semibold pointer-events-none">
+                          <span className="text-blue-700 font-black italic">VISA</span>
+                          <span className="text-orange-500 font-black">MC</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                          Expiry Date (MM/YY)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="MM/YY"
+                          maxLength={5}
+                          value={cardDetails.expiry}
+                          onChange={handleExpiryChange}
+                          className="w-full px-3.5 py-2 text-sm font-mono text-center bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-[#6a9739] shadow-2xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                          CVC / Security Code
+                        </label>
+                        <input
+                          type="password"
+                          placeholder="123"
+                          maxLength={4}
+                          value={cardDetails.cvc}
+                          onChange={handleCvcChange}
+                          className="w-full px-3.5 py-2 text-sm font-mono text-center bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-[#6a9739] shadow-2xs"
+                        />
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-gray-500 flex items-center gap-1 pt-1">
+                      <Lock className="w-3 h-3 text-emerald-600 shrink-0" />
+                      <span>
+                        Direct Card Gateway: Your card credentials are securely processed and verified.
+                      </span>
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Delivery Notes / Special Instructions */}
@@ -445,7 +683,9 @@ export default function Checkout() {
                       <span className="text-2xl font-black text-[#6a9739]">
                         ₨ {grandTotal.toFixed(2)}
                       </span>
-                      <p className="text-[10px] text-gray-400">Pay on delivery (COD)</p>
+                      <p className="text-[10px] text-gray-400">
+                        {paymentMethod === 'STRIPE' ? 'Online card payment via Stripe' : 'Pay on delivery (COD)'}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -453,16 +693,23 @@ export default function Checkout() {
                 {/* Confirm Order Button */}
                 <button
                   type="submit"
-                  disabled={orderMutation.isPending}
+                  disabled={orderMutation.isPending || isRedirectingToStripe}
                   className="w-full py-3.5 px-6 bg-[#6a9739] hover:bg-[#58802d] text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer text-sm disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {orderMutation.isPending ? (
+                  {orderMutation.isPending || isRedirectingToStripe ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Placing Your Order...</span>
+                      <span>
+                        {paymentMethod === 'STRIPE' ? 'Processing Card Payment...' : 'Placing Your Order...'}
+                      </span>
                     </>
+                  ) : paymentMethod === 'STRIPE' ? (
+                    <span className="flex items-center gap-2">
+                      <CreditCard className="w-4 h-4" />
+                      <span>Pay with Card (₨ {grandTotal.toFixed(2)})</span>
+                    </span>
                   ) : (
-                    <span>Confirm & Place Order</span>
+                    <span>Confirm & Place Order (COD)</span>
                   )}
                 </button>
 

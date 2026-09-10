@@ -11,6 +11,7 @@ const {
   createTestimonial,
   updateTestimonial,
   deleteTestimonial,
+  updateHomeTestimonialsBulk,
   getAllBrandLogos,
   createBrandLogo,
   updateBrandLogo,
@@ -33,6 +34,7 @@ adminRouter.delete('/sections/:id', deleteHomeSection);
 
 adminRouter.get('/testimonials', getAllTestimonials);
 adminRouter.post('/testimonials', createTestimonial);
+adminRouter.put('/testimonials', updateHomeTestimonialsBulk);
 adminRouter.put('/testimonials/:id', updateTestimonial);
 adminRouter.delete('/testimonials/:id', deleteTestimonial);
 

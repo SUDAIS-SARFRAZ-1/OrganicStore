@@ -6,6 +6,7 @@ import { addToCart } from '../services/cartApi';
 import { useCartDrawerStore } from '../store/cartDrawerStore';
 import Rating from '../components/Rating';
 import ProductCard from '../components/ProductCard';
+import ReviewSection from '../components/ReviewSection';
 import { ChevronRight, ShoppingBag, Truck, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 export default function ProductDetails() {
@@ -202,6 +203,11 @@ export default function ProductDetails() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Purchase-Gated Customer Reviews Section */}
+        <div className="mt-16">
+          <ReviewSection productId={product.id} productName={product.name} />
         </div>
 
         {/* Related Products Row */}

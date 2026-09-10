@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" fill="none">
+  <!-- Outer Circle -->
+  <circle cx="80" cy="80" r="76" fill="#ffffff" stroke="#33691e" stroke-width="4"/>
+  <circle cx="80" cy="80" r="70" fill="#ffffff" stroke="#5d4037" stroke-width="2"/>
+  
+  <!-- Upper Banner -->
+  <path d="M12 76C14 42 44 16 80 16C116 16 146 42 148 76H12Z" fill="#33691e"/>
+  <text x="80" y="52" text-anchor="middle" font-family="Impact, Arial Black, sans-serif" font-weight="900" font-size="28" fill="#ffffff" letter-spacing="2">USDA</text>
+  
+  <!-- Lower Field -->
+  <path d="M12 76C14 110 44 144 80 144C116 144 146 110 148 76H12Z" fill="#558b2f"/>
+  
+  <!-- Furrow lines representing farm rows -->
+  <path d="M25 105C45 92 115 92 135 105" stroke="#ffffff" stroke-width="3" fill="none"/>
+  <path d="M35 120C55 110 105 110 125 120" stroke="#ffffff" stroke-width="3.5" fill="none"/>
+  
+  <!-- ORGANIC Text -->
+  <text x="80" y="88" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="20" fill="#ffffff" letter-spacing="3">ORGANIC</text>
+</svg>

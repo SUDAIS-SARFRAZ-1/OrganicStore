@@ -1,28 +1,59 @@
+import { useEffect, useState } from 'react';
 import { useLocation, useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, ShoppingBag, Truck, ArrowRight, MapPin, Calendar, Leaf } from 'lucide-react';
+import { CheckCircle2, Truck, ArrowRight, MapPin, Leaf, ShieldCheck } from 'lucide-react';
 import { getOrderById } from '../services/orderApi';
+import { verifyStripeCheckoutSession } from '../services/paymentApi';
 
 export default function OrderSuccess() {
   const { orderNumber } = useParams();
   const location = useLocation();
+  const queryClient = useQueryClient();
+
+  const searchParams = new URLSearchParams(location.search);
+  const sessionId = searchParams.get('session_id');
+  const orderId = searchParams.get('order_id');
+
+  const [verifiedOrder, setVerifiedOrder] = useState(null);
+  const [isVerifying, setIsVerifying] = useState(Boolean(sessionId));
 
   // Try to use order passed in location state first, otherwise fetch by orderNumber/id
   const stateOrder = location.state?.order;
 
+  // Auto-verify Stripe session if returning from Stripe checkout
+  useEffect(() => {
+    if (sessionId) {
+      setIsVerifying(true);
+      verifyStripeCheckoutSession(sessionId, orderId)
+        .then((res) => {
+          if (res?.order) {
+            setVerifiedOrder(res.order);
+            queryClient.invalidateQueries({ queryKey: ['cart'] });
+          }
+        })
+        .catch((err) => {
+          console.warn('Session verification note:', err.message);
+        })
+        .finally(() => {
+          setIsVerifying(false);
+        });
+    }
+  }, [sessionId, orderId, queryClient]);
+
   const { data: fetchedOrder, isLoading } = useQuery({
     queryKey: ['order', orderNumber],
     queryFn: () => getOrderById(orderNumber),
-    enabled: !stateOrder && Boolean(orderNumber),
+    enabled: !stateOrder && !verifiedOrder && Boolean(orderNumber),
   });
 
-  const order = stateOrder || fetchedOrder;
+  const order = verifiedOrder || stateOrder || fetchedOrder;
 
-  if (isLoading && !order) {
+  if ((isLoading || isVerifying) && !order) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-24 text-center">
         <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#6a9739] border-t-transparent"></div>
-        <p className="mt-3 text-gray-500">Retrieving order details...</p>
+        <p className="mt-3 text-gray-500 font-semibold text-xs">
+          {isVerifying ? 'Confirming secure Stripe payment...' : 'Retrieving order details...'}
+        </p>
       </div>
     );
   }
@@ -64,8 +95,17 @@ export default function OrderSuccess() {
               <span className="block text-[11px] uppercase tracking-wider text-gray-400 font-bold">
                 Payment
               </span>
-              <span className="text-xs font-bold text-gray-900">
-                {order?.paymentMethod || 'COD'} (Unpaid)
+              <span className="text-xs font-bold text-gray-900 block">
+                {order?.paymentMethod === 'STRIPE' ? 'Stripe Card' : 'Cash on Delivery'}
+              </span>
+              <span
+                className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold mt-0.5 ${
+                  order?.paymentStatus === 'PAID'
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-amber-100 text-amber-800'
+                }`}
+              >
+                {order?.paymentStatus === 'PAID' ? 'PAID' : 'PENDING'}
               </span>
             </div>
 
@@ -74,7 +114,7 @@ export default function OrderSuccess() {
                 Total Due
               </span>
               <span className="text-xs font-black text-[#6a9739]">
-                ₨ {(order?.totalAmount || 0).toFixed(2)}
+                ₨ {Number(order?.totalAmount || 0).toFixed(2)}
               </span>
             </div>
 
@@ -82,17 +122,24 @@ export default function OrderSuccess() {
               <span className="block text-[11px] uppercase tracking-wider text-gray-400 font-bold">
                 Status
               </span>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 mt-0.5">
                 {order?.status || 'PENDING'}
               </span>
             </div>
           </div>
 
-          {/* Delivery Note */}
-          <div className="p-4 bg-green-50/60 border border-green-200 rounded-xl flex items-center justify-center gap-2.5 text-xs text-green-900 font-medium">
-            <Truck className="w-4 h-4 text-[#6a9739] shrink-0" />
-            <span>Please have <strong>₨ {(order?.totalAmount || 0).toFixed(2)}</strong> cash ready upon courier arrival.</span>
-          </div>
+          {/* Delivery & Payment Instructions */}
+          {order?.paymentStatus === 'PAID' ? (
+            <div className="p-4 bg-green-50/70 border border-green-200 rounded-xl flex items-center justify-center gap-2.5 text-xs text-green-900 font-medium">
+              <ShieldCheck className="w-4 h-4 text-[#6a9739] shrink-0" />
+              <span>Your payment of <strong>₨ {Number(order?.totalAmount || 0).toFixed(2)}</strong> via Stripe is verified. Zero cash needed upon delivery!</span>
+            </div>
+          ) : (
+            <div className="p-4 bg-green-50/60 border border-green-200 rounded-xl flex items-center justify-center gap-2.5 text-xs text-green-900 font-medium">
+              <Truck className="w-4 h-4 text-[#6a9739] shrink-0" />
+              <span>Please have <strong>₨ {Number(order?.totalAmount || 0).toFixed(2)}</strong> cash ready upon courier arrival.</span>
+            </div>
+          )}
 
           {/* Order Items Review if available */}
           {order?.items && order.items.length > 0 && (
@@ -108,7 +155,7 @@ export default function OrderSuccess() {
                       <span className="font-semibold text-gray-900">{item.productName}</span>
                       <span className="text-gray-400">× {item.quantity}</span>
                     </div>
-                    <span className="font-bold text-gray-800">₨ {item.totalPrice.toFixed(2)}</span>
+                    <span className="font-bold text-gray-800">₨ {Number(item.totalPrice || 0).toFixed(2)}</span>
                   </div>
                 ))}
               </div>
@@ -138,6 +185,14 @@ export default function OrderSuccess() {
             >
               Continue Shopping <ArrowRight className="w-4 h-4" />
             </Link>
+            {order?.id && (
+              <Link
+                to={`/account/orders/${order.id}`}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Track Order in Account
+              </Link>
+            )}
           </div>
         </div>
       </div>

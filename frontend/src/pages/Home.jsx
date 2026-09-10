@@ -1,6 +1,7 @@
+import { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Truck, Award, Percent, RefreshCw, Clock, ExternalLink } from 'lucide-react';
+import { ArrowRight, Truck, Percent, RefreshCw, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getCategories } from '../services/categoryApi';
 import { getProducts } from '../services/productApi';
 import { getTestimonials, getBrandLogos, getHomeSections } from '../services/contentApi';
@@ -12,6 +13,22 @@ import TestimonialCard from '../components/TestimonialCard';
 export default function Home() {
   const queryClient = useQueryClient();
   const { openDrawer } = useCartDrawerStore();
+
+  const bestSellingRef = useRef(null);
+  const categoriesRef = useRef(null);
+  const trendingRef = useRef(null);
+
+  const scrollLeft = (ref) => {
+    if (ref.current) {
+      ref.current.scrollBy({ left: -320, behavior: 'smooth' });
+    }
+  };
+
+  const scrollRight = (ref) => {
+    if (ref.current) {
+      ref.current.scrollBy({ left: 320, behavior: 'smooth' });
+    }
+  };
 
   const addMutation = useMutation({
     mutationFn: addToCart,
@@ -129,8 +146,12 @@ export default function Home() {
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-[#6a9739]/20 text-[#6a9739]">
-                <Award className="w-6 h-6" />
+              <div className="p-2 rounded-lg bg-white/10 text-[#6a9739] flex items-center justify-center w-11 h-11">
+                <img
+                  src="/brands/certified-organic.svg"
+                  alt="Certified Organic Seal"
+                  className="w-7 h-7 object-contain"
+                />
               </div>
               <div>
                 <h4 className="font-semibold text-sm">Certified Organic</h4>
@@ -161,63 +182,108 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Best Selling Products Section */}
+      {/* Best Selling Products Section with Horizontal Carousel */}
       <section className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-2xl mx-auto mb-10">
-          <span className="text-xs uppercase font-bold tracking-widest text-[#6a9739]">
-            Handpicked For You
-          </span>
-          <h2 className="text-3xl font-extrabold text-gray-900 mt-1">
-            Best Selling Products
-          </h2>
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
+          <div>
+            <span className="text-xs uppercase font-bold tracking-widest text-[#6a9739]">
+              Handpicked For You
+            </span>
+            <h2 className="text-3xl font-extrabold text-gray-900 mt-1">
+              Best Selling Products
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              onClick={() => scrollLeft(bestSellingRef)}
+              aria-label="Previous Best Selling Products"
+              className="w-10 h-10 rounded-full bg-white border border-gray-200 text-gray-700 hover:text-[#6a9739] hover:border-[#6a9739] hover:bg-[#f8f6f3] flex items-center justify-center shadow-xs transition-all cursor-pointer"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => scrollRight(bestSellingRef)}
+              aria-label="Next Best Selling Products"
+              className="w-10 h-10 rounded-full bg-white border border-gray-200 text-gray-700 hover:text-[#6a9739] hover:border-[#6a9739] hover:bg-[#f8f6f3] flex items-center justify-center shadow-xs transition-all cursor-pointer"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {isFeaturedLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="flex gap-6 overflow-hidden py-2">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-80 bg-white rounded-xl animate-pulse border border-gray-100"></div>
+              <div key={i} className="w-64 sm:w-72 h-80 bg-white rounded-xl animate-pulse border border-gray-100 shrink-0"></div>
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div
+            ref={bestSellingRef}
+            className="flex gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory py-3 scrollbar-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
             {featuredProducts.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onAddToCart={handleAddToCart}
-              />
+              <div key={product.id} className="w-64 sm:w-72 shrink-0 snap-start">
+                <ProductCard
+                  product={product}
+                  onAddToCart={handleAddToCart}
+                />
+              </div>
             ))}
           </div>
         )}
       </section>
 
-      {/* Category Highlight Cards */}
-      <section className="py-12 bg-white border-y border-gray-100">
+      {/* Category Highlight Cards with Horizontal Carousel */}
+      <section className="py-14 bg-white border-y border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-10">
-            <span className="text-xs uppercase font-bold tracking-widest text-[#6a9739]">
-              Explore Catalog
-            </span>
-            <h2 className="text-3xl font-extrabold text-gray-900 mt-1">
-              Shop by Category
-            </h2>
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
+            <div>
+              <span className="text-xs uppercase font-bold tracking-widest text-[#6a9739]">
+                Explore Catalog
+              </span>
+              <h2 className="text-3xl font-extrabold text-gray-900 mt-1">
+                Shop by Category
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <button
+                onClick={() => scrollLeft(categoriesRef)}
+                aria-label="Previous Categories"
+                className="w-10 h-10 rounded-full bg-white border border-gray-200 text-gray-700 hover:text-[#6a9739] hover:border-[#6a9739] hover:bg-[#f8f6f3] flex items-center justify-center shadow-xs transition-all cursor-pointer"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => scrollRight(categoriesRef)}
+                aria-label="Next Categories"
+                className="w-10 h-10 rounded-full bg-white border border-gray-200 text-gray-700 hover:text-[#6a9739] hover:border-[#6a9739] hover:bg-[#f8f6f3] flex items-center justify-center shadow-xs transition-all cursor-pointer"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+          <div
+            ref={categoriesRef}
+            className="flex gap-5 overflow-x-auto scroll-smooth snap-x snap-mandatory py-3 scrollbar-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
             {categories.map((cat) => (
               <Link
                 key={cat.id}
                 to={`/category/${cat.slug}`}
-                className="group bg-[#f8f6f3] rounded-xl p-5 shadow-2xs hover:shadow-md border border-gray-100 transition-all text-center flex flex-col items-center cursor-pointer"
+                className="w-48 sm:w-56 shrink-0 snap-start group bg-[#f8f6f3] rounded-2xl p-6 shadow-2xs hover:shadow-md border border-gray-100 transition-all text-center flex flex-col items-center cursor-pointer"
               >
-                <div className="w-24 h-24 rounded-full overflow-hidden bg-white mb-4 group-hover:scale-105 transition-transform duration-200 border border-gray-200">
+                <div className="w-24 h-24 rounded-full overflow-hidden bg-white mb-4 group-hover:scale-105 transition-transform duration-200 border border-gray-200 shadow-2xs">
                   <img
                     src={cat.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80'}
                     alt={cat.name}
                     className="w-full h-full object-cover"
                   />
                 </div>
-                <h3 className="font-bold text-gray-800 group-hover:text-[#6a9739] transition-colors">
+                <h3 className="font-bold text-gray-800 group-hover:text-[#6a9739] transition-colors text-base">
                   {cat.name}
                 </h3>
                 <p className="text-xs text-gray-500 mt-1">
@@ -254,39 +320,62 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Trending Products Section */}
+      {/* Trending Products Section with Horizontal Carousel */}
       <section className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-10 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
           <div>
             <span className="text-xs uppercase font-bold tracking-widest text-[#6a9739]">
               Trending Now
             </span>
             <h2 className="text-3xl font-extrabold text-gray-900 mt-1">
-              Fresh & In Demand
+              Fresh &amp; In Demand
             </h2>
           </div>
-          <Link
-            to="/shop"
-            className="inline-flex items-center gap-1.5 text-sm font-bold text-[#6a9739] hover:underline"
-          >
-            View All Products <ArrowRight className="w-4 h-4" />
-          </Link>
+
+          <div className="flex items-center gap-4 self-end sm:self-auto">
+            <Link
+              to="/shop"
+              className="hidden sm:inline-flex items-center gap-1.5 text-sm font-bold text-[#6a9739] hover:underline mr-2"
+            >
+              View All <ArrowRight className="w-4 h-4" />
+            </Link>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => scrollLeft(trendingRef)}
+                aria-label="Previous Trending Products"
+                className="w-10 h-10 rounded-full bg-white border border-gray-200 text-gray-700 hover:text-[#6a9739] hover:border-[#6a9739] hover:bg-[#f8f6f3] flex items-center justify-center shadow-xs transition-all cursor-pointer"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => scrollRight(trendingRef)}
+                aria-label="Next Trending Products"
+                className="w-10 h-10 rounded-full bg-white border border-gray-200 text-gray-700 hover:text-[#6a9739] hover:border-[#6a9739] hover:bg-[#f8f6f3] flex items-center justify-center shadow-xs transition-all cursor-pointer"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
         </div>
 
         {isTrendingLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="flex gap-6 overflow-hidden py-2">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-80 bg-white rounded-xl animate-pulse border border-gray-100"></div>
+              <div key={i} className="w-64 sm:w-72 h-80 bg-white rounded-xl animate-pulse border border-gray-100 shrink-0"></div>
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div
+            ref={trendingRef}
+            className="flex gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory py-3 scrollbar-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
             {trendingProducts.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onAddToCart={handleAddToCart}
-              />
+              <div key={product.id} className="w-64 sm:w-72 shrink-0 snap-start">
+                <ProductCard
+                  product={product}
+                  onAddToCart={handleAddToCart}
+                />
+              </div>
             ))}
           </div>
         )}
@@ -373,22 +462,28 @@ export default function Home() {
               </span>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-8 lg:gap-12">
+            <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 lg:gap-10">
               {brands.map((brand) => (
                 <a
                   key={brand.id}
                   href={brand.websiteUrl || '#'}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group flex flex-col items-center gap-2 opacity-60 hover:opacity-100 transition-opacity duration-200"
+                  className="group flex flex-col items-center gap-2 p-3.5 rounded-xl bg-[#fbfbfb] hover:bg-white border border-gray-100 hover:border-[#6a9739]/40 hover:shadow-sm transition-all duration-200"
                   title={brand.name}
                 >
-                  <img
-                    src={brand.logoUrl}
-                    alt={brand.name}
-                    className="h-12 w-auto object-contain grayscale group-hover:grayscale-0 transition-all duration-200"
-                  />
-                  <span className="text-[10px] text-gray-400 group-hover:text-gray-600 font-medium hidden sm:block">
+                  <div className="h-12 w-28 sm:w-32 flex items-center justify-center">
+                    <img
+                      src={brand.logoUrl}
+                      alt={brand.name}
+                      className="max-h-10 max-w-full object-contain filter group-hover:scale-105 transition-all duration-200"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = '/brands/certified-organic.svg';
+                      }}
+                    />
+                  </div>
+                  <span className="text-[11px] text-gray-500 group-hover:text-[#6a9739] font-medium transition-colors">
                     {brand.name}
                   </span>
                 </a>

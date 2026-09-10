@@ -17,3 +17,14 @@ export async function getOrderById(id) {
   const response = await api.get(`/orders/${id}`);
   return response.order;
 }
+
+export async function confirmOrderDelivery(id) {
+  const response = await api.put(`/orders/${id}/confirm-delivery`);
+  return response.order;
+}
+
+export async function cancelCustomerOrder(id) {
+  const response = await api.put(`/orders/${id}/cancel`);
+  return response.order;
+}
+
