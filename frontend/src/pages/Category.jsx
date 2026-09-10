@@ -1,17 +1,34 @@
 import { useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { getCategoryBySlug } from '../services/categoryApi';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getCategoryBySlug, DEFAULT_CATEGORIES } from '../services/categoryApi';
 import { getProducts } from '../services/productApi';
+import { addToCart } from '../services/cartApi';
+import { useCartDrawerStore } from '../store/cartDrawerStore';
 import ProductGrid from '../components/ProductGrid';
 import { ChevronRight } from 'lucide-react';
 
 export default function Category() {
   const { slug } = useParams();
+  const queryClient = useQueryClient();
+  const { openDrawer } = useCartDrawerStore();
 
-  // Fetch category info
+  const addMutation = useMutation({
+    mutationFn: addToCart,
+    onSuccess: (updatedCart) => {
+      queryClient.setQueryData(['cart'], updatedCart);
+      openDrawer();
+    },
+  });
+
+  const handleAddToCart = (product) => {
+    addMutation.mutate({ productId: product.id, quantity: 1 });
+  };
+
+  // Fetch category info with instant fallback
   const { data: category, isLoading: isCategoryLoading } = useQuery({
     queryKey: ['category', slug],
     queryFn: () => getCategoryBySlug(slug),
+    placeholderData: () => DEFAULT_CATEGORIES.find((c) => c.slug === slug) || null,
   });
 
   // Fetch products for this category
@@ -76,6 +93,7 @@ export default function Category() {
         <ProductGrid
           products={products}
           isLoading={isProductsLoading}
+          onAddToCart={handleAddToCart}
         />
       </div>
     </div>

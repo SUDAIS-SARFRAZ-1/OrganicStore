@@ -1,13 +1,30 @@
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, Truck, Award, Percent, RefreshCw, Clock, ExternalLink } from 'lucide-react';
 import { getCategories } from '../services/categoryApi';
 import { getProducts } from '../services/productApi';
 import { getTestimonials, getBrandLogos, getHomeSections } from '../services/contentApi';
+import { addToCart } from '../services/cartApi';
+import { useCartDrawerStore } from '../store/cartDrawerStore';
 import ProductCard from '../components/ProductCard';
 import TestimonialCard from '../components/TestimonialCard';
 
 export default function Home() {
+  const queryClient = useQueryClient();
+  const { openDrawer } = useCartDrawerStore();
+
+  const addMutation = useMutation({
+    mutationFn: addToCart,
+    onSuccess: (updatedCart) => {
+      queryClient.setQueryData(['cart'], updatedCart);
+      openDrawer();
+    },
+  });
+
+  const handleAddToCart = (product) => {
+    addMutation.mutate({ productId: product.id, quantity: 1 });
+  };
+
   // Dynamic categories
   const { data: categories = [] } = useQuery({
     queryKey: ['categories'],
@@ -164,7 +181,11 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {featuredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
+              <ProductCard
+                key={product.id}
+                product={product}
+                onAddToCart={handleAddToCart}
+              />
             ))}
           </div>
         )}
@@ -261,7 +282,11 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {trendingProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
+              <ProductCard
+                key={product.id}
+                product={product}
+                onAddToCart={handleAddToCart}
+              />
             ))}
           </div>
         )}

@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProduct } from '../services/productApi';
+import { addToCart } from '../services/cartApi';
+import { useCartDrawerStore } from '../store/cartDrawerStore';
 import Rating from '../components/Rating';
 import ProductCard from '../components/ProductCard';
 import { ChevronRight, ShoppingBag, Truck, ShieldCheck, CheckCircle2 } from 'lucide-react';
@@ -10,6 +12,17 @@ export default function ProductDetails() {
   const { identifier } = useParams();
   const [selectedImage, setSelectedImage] = useState(null);
   const [quantity, setQuantity] = useState(1);
+
+  const queryClient = useQueryClient();
+  const { openDrawer } = useCartDrawerStore();
+
+  const addMutation = useMutation({
+    mutationFn: addToCart,
+    onSuccess: (updatedCart) => {
+      queryClient.setQueryData(['cart'], updatedCart);
+      openDrawer();
+    },
+  });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['product', identifier],
@@ -167,11 +180,12 @@ export default function ProductDetails() {
                 </div>
 
                 <button
-                  disabled={!product.inStock}
+                  onClick={() => addMutation.mutate({ productId: product.id, quantity })}
+                  disabled={!product.inStock || addMutation.isPending}
                   className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-[#6a9739] hover:bg-[#58802d] text-white font-bold rounded-lg shadow-sm disabled:opacity-40 transition-colors cursor-pointer"
                 >
                   <ShoppingBag className="w-5 h-5" />
-                  Add to Cart
+                  {addMutation.isPending ? 'Adding...' : 'Add to Cart'}
                 </button>
               </div>
 
@@ -203,7 +217,11 @@ export default function ProductDetails() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {relatedProducts.map((relProduct) => (
-                <ProductCard key={relProduct.id} product={relProduct} />
+                <ProductCard
+                  key={relProduct.id}
+                  product={relProduct}
+                  onAddToCart={(p) => addMutation.mutate({ productId: p.id, quantity: 1 })}
+                />
               ))}
             </div>
           </div>

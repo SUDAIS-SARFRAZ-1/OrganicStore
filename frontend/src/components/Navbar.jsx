@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ShoppingBag, User, Menu, X, Leaf, ChevronDown, ChevronRight, LogOut, LayoutDashboard } from 'lucide-react';
-import { getCategories } from '../services/categoryApi';
+import { getCategories, DEFAULT_CATEGORIES } from '../services/categoryApi';
+import { getCart } from '../services/cartApi';
 import { useAuthStore } from '../store/authStore';
 import { useCartDrawerStore } from '../store/cartDrawerStore';
 import MiniCartDrawer from './MiniCartDrawer';
@@ -12,12 +13,23 @@ export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuthStore();
   const { openDrawer } = useCartDrawerStore();
 
+  // Live cart data via React Query (Rule 9)
+  const { data: cart = { totalItems: 0, subtotal: 0 } } = useQuery({
+    queryKey: ['cart'],
+    queryFn: getCart,
+    staleTime: 1000 * 30,
+  });
+
   // Dynamic category navigation driven by DB categories via React Query (Rule 9)
-  const { data: categories = [], isLoading } = useQuery({
+  // Uses DEFAULT_CATEGORIES placeholder/fallback so links never disappear if backend is offline or restarting
+  const { data: categories = DEFAULT_CATEGORIES } = useQuery({
     queryKey: ['categories'],
     queryFn: getCategories,
+    placeholderData: DEFAULT_CATEGORIES,
     staleTime: 1000 * 60 * 10,
   });
+
+  const displayCategories = categories && categories.length > 0 ? categories : DEFAULT_CATEGORIES;
 
   // Lock body scroll when mobile drawer is open to prevent background scrolling
   useEffect(() => {
@@ -56,29 +68,21 @@ export default function Navbar() {
               </div>
             </Link>
 
-            {/* Desktop Navigation Links (Dynamic Categories driven by Database) */}
+            {/* Desktop Navigation Links (Dynamic Categories driven by Database with resilient fallback) */}
             <nav className="hidden xl:flex items-center gap-6 2xl:gap-8 text-sm">
               <NavLink to="/shop" className={activeLinkClass}>
                 Everything
               </NavLink>
 
-              {isLoading ? (
-                <div className="flex gap-4 animate-pulse">
-                  <div className="h-4 w-16 bg-gray-200 rounded"></div>
-                  <div className="h-4 w-16 bg-gray-200 rounded"></div>
-                  <div className="h-4 w-16 bg-gray-200 rounded"></div>
-                </div>
-              ) : (
-                categories.slice(0, 5).map((category) => (
-                  <NavLink
-                    key={category.id}
-                    to={`/category/${category.slug}`}
-                    className={activeLinkClass}
-                  >
-                    {category.name}
-                  </NavLink>
-                ))
-              )}
+              {displayCategories.slice(0, 5).map((category) => (
+                <NavLink
+                  key={category.id || category.slug}
+                  to={`/category/${category.slug}`}
+                  className={activeLinkClass}
+                >
+                  {category.name}
+                </NavLink>
+              ))}
 
               <NavLink to="/about" className={activeLinkClass}>
                 About
@@ -108,12 +112,14 @@ export default function Navbar() {
               >
                 <div className="relative">
                   <ShoppingBag className="w-6 h-6" />
-                  <span className="absolute -top-1.5 -right-2 bg-[#6a9739] text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-xs">
-                    0
-                  </span>
+                  {cart?.totalItems > 0 && (
+                    <span className="absolute -top-1.5 -right-2 bg-[#6a9739] text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-xs">
+                      {cart.totalItems}
+                    </span>
+                  )}
                 </div>
                 <span className="hidden sm:inline-block font-semibold text-sm">
-                  ₨ 0.00
+                  ₨ {(cart?.subtotal || 0).toFixed(2)}
                 </span>
               </button>
 
@@ -244,9 +250,9 @@ export default function Navbar() {
                     Categories
                   </span>
 
-                  {categories.map((category) => (
+                  {displayCategories.map((category) => (
                     <NavLink
-                      key={category.id}
+                      key={category.id || category.slug}
                       to={`/category/${category.slug}`}
                       onClick={() => setMobileMenuOpen(false)}
                       className={({ isActive }) =>
@@ -258,9 +264,11 @@ export default function Navbar() {
                       }
                     >
                       <span>{category.name}</span>
-                      <span className="text-xs text-gray-400">
-                        {category.productCount}
-                      </span>
+                      {category.productCount !== undefined && category.productCount > 0 && (
+                        <span className="text-xs text-gray-400">
+                          {category.productCount}
+                        </span>
+                      )}
                     </NavLink>
                   ))}
                 </div>

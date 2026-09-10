@@ -1,14 +1,17 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Leaf, Mail, MapPin, Phone } from 'lucide-react';
-import { getCategories } from '../services/categoryApi';
+import { getCategories, DEFAULT_CATEGORIES } from '../services/categoryApi';
 
 export default function Footer() {
-  const { data: categories = [] } = useQuery({
+  const { data: categories = DEFAULT_CATEGORIES } = useQuery({
     queryKey: ['categories'],
     queryFn: getCategories,
+    placeholderData: DEFAULT_CATEGORIES,
     staleTime: 5 * 60 * 1000,
   });
+
+  const displayCategories = categories && categories.length > 0 ? categories : DEFAULT_CATEGORIES;
 
   const quickLinks = [
     { label: 'Shop', to: '/shop' },
@@ -63,8 +66,8 @@ export default function Footer() {
                   </Link>
                 </li>
               ))}
-              {categories.slice(0, 4).map((cat) => (
-                <li key={cat.id}>
+              {displayCategories.slice(0, 4).map((cat) => (
+                <li key={cat.id || cat.slug}>
                   <Link
                     to={`/category/${cat.slug}`}
                     className="text-sm text-gray-400 hover:text-[#6a9739] transition-colors duration-150"

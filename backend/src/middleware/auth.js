@@ -83,7 +83,48 @@ function authorize(...roles) {
   };
 }
 
+/**
+ * Optional Authentication Middleware
+ * Attaches user if token is valid, but allows unauthenticated visitors to proceed as guest.
+ */
+async function optionalAuth(req, res, next) {
+  try {
+    let token = null;
+
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.split(' ')[1];
+    } else if (req.cookies && req.cookies.token) {
+      token = req.cookies.token;
+    }
+
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await prisma.user.findUnique({
+          where: { id: decoded.id },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+          },
+        });
+        if (user) {
+          req.user = user;
+        }
+      } catch {
+        // Invalid or expired token, proceed as guest
+      }
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   authenticate,
   authorize,
+  optionalAuth,
 };

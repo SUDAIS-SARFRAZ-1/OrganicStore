@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProducts } from '../services/productApi';
 import { getCategories } from '../services/categoryApi';
+import { addToCart } from '../services/cartApi';
+import { useCartDrawerStore } from '../store/cartDrawerStore';
 import ProductGrid from '../components/ProductGrid';
 import ProductFilters from '../components/ProductFilters';
 import SortDropdown from '../components/SortDropdown';
@@ -11,6 +13,20 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function Shop() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const queryClient = useQueryClient();
+  const { openDrawer } = useCartDrawerStore();
+
+  const addMutation = useMutation({
+    mutationFn: addToCart,
+    onSuccess: (updatedCart) => {
+      queryClient.setQueryData(['cart'], updatedCart);
+      openDrawer();
+    },
+  });
+
+  const handleAddToCart = (product) => {
+    addMutation.mutate({ productId: product.id, quantity: 1 });
+  };
 
   // URL state sync
   const categoryParam = searchParams.get('category') || 'all';
@@ -137,6 +153,7 @@ export default function Shop() {
             <ProductGrid
               products={products}
               isLoading={isLoading}
+              onAddToCart={handleAddToCart}
             />
 
             {/* Pagination Controls */}
