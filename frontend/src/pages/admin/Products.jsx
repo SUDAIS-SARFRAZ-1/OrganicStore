@@ -9,7 +9,8 @@ import {
   Loader2, 
   X, 
   AlertCircle, 
-  Star 
+  Star,
+  ChevronDown,
 } from 'lucide-react';
 import { getProducts, createProduct, updateProduct, deleteProduct } from '../../services/productApi';
 import { getCategories } from '../../services/categoryApi';
@@ -93,6 +94,7 @@ export default function Products() {
       queryClient.invalidateQueries(['adminProducts']);
       queryClient.invalidateQueries(['products']);
       queryClient.invalidateQueries(['adminDashboardStats']);
+      queryClient.invalidateQueries(['cart']);
       setDeleteConfirmId(null);
     },
   });
@@ -204,18 +206,21 @@ export default function Products() {
           />
         </div>
 
-        <select
-          value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value)}
-          className="w-full sm:w-48 px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:border-[#6a9739] text-gray-700"
-        >
-          <option value="all">All Categories</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.slug}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+        <div className="relative w-full sm:w-56 shrink-0">
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="w-full appearance-none pl-3.5 pr-8 py-2 text-xs font-semibold bg-gray-50 hover:bg-gray-100/70 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:border-[#6a9739] focus:ring-2 focus:ring-[#6a9739]/20 text-gray-700 cursor-pointer transition-all shadow-2xs"
+          >
+            <option value="all">All Categories ({categories.length})</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.slug}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" />
+        </div>
       </div>
 
       {/* Products Table */}
@@ -417,19 +422,22 @@ export default function Products() {
                   <label className="block font-bold text-gray-700 mb-1">
                     Category *
                   </label>
-                  <select
-                    name="categoryId"
-                    required
-                    value={formData.categoryId}
-                    onChange={handleInputChange}
-                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:border-[#6a9739] text-gray-800"
-                  >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select
+                      name="categoryId"
+                      required
+                      value={formData.categoryId}
+                      onChange={handleInputChange}
+                      className="w-full appearance-none pl-3.5 pr-9 py-2.5 bg-gray-50 hover:bg-gray-100/50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:border-[#6a9739] focus:ring-2 focus:ring-[#6a9739]/20 text-xs font-semibold text-gray-800 cursor-pointer transition-all"
+                    >
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" />
+                  </div>
                 </div>
 
                 <div>

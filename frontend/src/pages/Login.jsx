@@ -25,9 +25,17 @@ export default function Login() {
   const loginMutation = useMutation({
     mutationFn: loginUser,
     onSuccess: (data) => {
-      setAuth(data.user, data.token);
-      queryClient.invalidateQueries({ queryKey: ['cart'] });
-      navigate(redirectUrl, { replace: true });
+      // 1. Wipe all query caches from previous session so no stale member data is displayed
+      queryClient.clear();
+
+      // 2. Set new user auth state
+      setAuth(data.user);
+
+      // 3. By default, both admin and customer navigate to the home page ('/')
+      // Only redirect to checkout if the customer was actively in the checkout flow
+      const redirectParam = searchParams.get('redirect');
+      const targetDestination = redirectParam && redirectParam.startsWith('/checkout') ? redirectParam : '/';
+      navigate(targetDestination, { replace: true });
     },
     onError: (err) => {
       if (err.response?.data?.isUnverified) {
@@ -77,9 +85,11 @@ export default function Login() {
         {/* Logo and Heading */}
         <div className="text-center">
           <Link to="/" className="inline-flex items-center gap-2 group mb-4">
-            <div className="w-12 h-12 rounded-full bg-[#6a9739]/10 flex items-center justify-center text-[#6a9739] group-hover:bg-[#6a9739] group-hover:text-white transition-colors">
-              <Leaf className="w-7 h-7" />
-            </div>
+            <img
+              src="/image.png"
+              alt="Organic Store"
+              className="h-12 w-auto object-contain transition-transform duration-200 group-hover:scale-105"
+            />
           </Link>
           <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">
             Welcome Back
@@ -195,6 +205,12 @@ export default function Login() {
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-700">
                   Password
                 </label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs font-medium text-[#6a9739] hover:text-[#58802d] hover:underline transition-colors"
+                >
+                  Forgot password?
+                </Link>
               </div>
               <div className="relative">
                 <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />

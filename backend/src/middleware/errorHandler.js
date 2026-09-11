@@ -1,15 +1,28 @@
 /**
- * Centralized Error Handling Middleware
- * Consistent response structure: { success: false, message: string, error?: any }
+ * Centralized Error Handling Middleware (Rule 21)
+ * Security Hardening (Item 14):
+ * - Masks internal 500 error messages and stack traces in production.
+ * - Logs server errors securely.
  */
 function errorHandler(err, req, res, next) {
-  const statusCode = err.statusCode || (res.statusCode >= 400 ? res.statusCode : 500);
+  const isProd = process.env.NODE_ENV === 'production';
+  const statusCode = err.statusCode || (res.statusCode >= 400 && res.statusCode < 600 ? res.statusCode : 500);
 
-  // Return clean, consistent error JSON
+  // Prevent leaking sensitive server or database internals in production
+  let message = err.message || 'Internal Server Error';
+  if (statusCode === 500 && isProd) {
+    message = 'An unexpected internal server error occurred. Please try again later.';
+  }
+
+  // Security logging for server-side errors
+  if (statusCode >= 500) {
+    console.error(`[SERVER ERROR] ${req.method} ${req.originalUrl}:`, err);
+  }
+
   res.status(statusCode).json({
     success: false,
-    message: err.message || 'Internal Server Error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+    message,
+    ...(!isProd && { stack: err.stack }),
   });
 }
 

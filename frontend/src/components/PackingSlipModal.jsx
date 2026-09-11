@@ -5,7 +5,9 @@ import {
   Package,
   Phone,
   FileText,
+  Calendar,
 } from 'lucide-react';
+import { formatOrderDate } from '../utils/dateUtils';
 
 /**
  * Warehouse Packing Slips & Order Manifest Modal (Admin only)
@@ -92,7 +94,7 @@ export default function PackingSlipModal({ isOpen, onClose, orders = [], filterS
                   Organic Store • Packing Manifest
                 </h1>
                 <p className="text-xs text-gray-600">
-                  Batch Status: {filterStatus} • Generated: {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  Batch Status: <span className="font-semibold text-black">{filterStatus}</span> • Generated: <span className="font-semibold text-black">{formatOrderDate(new Date())}</span>
                 </p>
               </div>
               <div className="text-right text-xs">
@@ -123,14 +125,8 @@ export default function PackingSlipModal({ isOpen, onClose, orders = [], filterS
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider bg-gray-100 text-gray-800 print:border print:border-black">
                         {order.status}
                       </span>
-                      <span className="text-[11px] text-gray-500">
-                        {new Date(order.createdAt).toLocaleDateString('en-GB', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                      <span className="text-[11px] font-semibold text-gray-600 print:text-black print:font-bold">
+                        {formatOrderDate(order.createdAt)}
                       </span>
                     </div>
                   </div>

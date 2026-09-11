@@ -1,9 +1,11 @@
 const Stripe = require('stripe');
 const { prisma } = require('../config/db');
 
-// Initialize Stripe instance
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY || '';
-const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
+// Dynamic Stripe instance helper to always capture active environment credentials
+function getStripeInstance() {
+  const stripeSecretKey = (process.env.STRIPE_SECRET_KEY || '').trim();
+  return stripeSecretKey ? new Stripe(stripeSecretKey) : null;
+}
 
 /**
  * GET /api/payments/config
@@ -12,7 +14,7 @@ const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 async function getStripeConfig(req, res) {
   return res.status(200).json({
     success: true,
-    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '',
+    publishableKey: (process.env.STRIPE_PUBLISHABLE_KEY || '').trim(),
   });
 }
 
@@ -68,78 +70,89 @@ async function createCheckoutSession(req, res, next) {
       });
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
 
     // Construct line items for Stripe
-    const lineItems = order.items.map((item) => ({
-      price_data: {
-        currency: 'pkr',
-        product_data: {
-          name: item.productName,
+    let lineItems = [];
+    if (Number(order.discount) > 0) {
+      // With coupon discount, present line item matching exact final totalAmount
+      lineItems = [
+        {
+          price_data: {
+            currency: 'pkr',
+            product_data: {
+              name: `Organic Store Order #${order.orderNumber}`,
+              description: order.items.map((i) => `${i.productName} (x${i.quantity})`).join(', '),
+            },
+            unit_amount: Math.max(100, Math.round(Number(order.totalAmount) * 100)),
+          },
+          quantity: 1,
         },
-        unit_amount: Math.round(Number(item.unitPrice) * 100),
-      },
-      quantity: item.quantity,
-    }));
-
-    // Add shipping fee if applicable
-    if (Number(order.shippingFee) > 0) {
-      lineItems.push({
+      ];
+    } else {
+      lineItems = order.items.map((item) => ({
         price_data: {
           currency: 'pkr',
           product_data: {
-            name: 'Standard Delivery Shipping',
+            name: item.productName,
           },
-          unit_amount: Math.round(Number(order.shippingFee) * 100),
+          unit_amount: Math.round(Number(item.unitPrice) * 100),
         },
-        quantity: 1,
+        quantity: item.quantity,
+      }));
+
+      // Add shipping fee if applicable
+      if (Number(order.shippingFee) > 0) {
+        lineItems.push({
+          price_data: {
+            currency: 'pkr',
+            product_data: {
+              name: 'Standard Delivery Shipping',
+            },
+            unit_amount: Math.round(Number(order.shippingFee) * 100),
+          },
+          quantity: 1,
+        });
+      }
+    }
+
+    const stripe = getStripeInstance();
+    if (!stripe) {
+      return res.status(500).json({
+        success: false,
+        message: 'Stripe payment gateway is not configured. Please check STRIPE_SECRET_KEY.',
       });
     }
 
-    // Try creating session with real Stripe if configured
-    if (stripe && stripeSecretKey) {
-      try {
-        const session = await stripe.checkout.sessions.create({
-          payment_method_types: ['card'],
-          mode: 'payment',
-          customer_email: order.user?.email || req.user.email,
-          client_reference_id: order.id,
-          line_items: lineItems,
-          metadata: {
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            userId: req.user.id,
-          },
-          success_url: `${frontendUrl}/order-success/${order.orderNumber}?session_id={CHECKOUT_SESSION_ID}&order_id=${order.id}`,
-          cancel_url: `${frontendUrl}/checkout?cancelled=true&order_id=${order.id}`,
-        });
+    try {
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        mode: 'payment',
+        customer_email: order.user?.email || req.user.email,
+        client_reference_id: order.id,
+        line_items: lineItems,
+        metadata: {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          userId: req.user.id,
+        },
+        success_url: `${frontendUrl}/order-success/${order.orderNumber}?session_id={CHECKOUT_SESSION_ID}&order_id=${order.id}`,
+        cancel_url: `${frontendUrl}/checkout?cancelled=true&order_id=${order.id}`,
+      });
 
-        return res.status(200).json({
-          success: true,
-          sessionId: session.id,
-          url: session.url,
-        });
-      } catch (stripeError) {
-        console.warn('Stripe checkout error:', stripeError.message);
-        // If Stripe keys are placeholder or invalid, inform client or fallback
-        if (stripeSecretKey.includes('Mock') || stripeError.type === 'StripeAuthenticationError') {
-          // Dev sandbox simulated session
-          const simulatedSessionId = `sim_session_${order.id}_${Date.now()}`;
-          const simulatedUrl = `${frontendUrl}/order-success/${order.orderNumber}?session_id=${simulatedSessionId}&order_id=${order.id}&simulated=true`;
-          return res.status(200).json({
-            success: true,
-            sessionId: simulatedSessionId,
-            url: simulatedUrl,
-            isSimulated: true,
-            message: 'Stripe test API key needed for live card input. Using development simulation.',
-          });
-        }
+      console.log(`[STRIPE CHECKOUT CREATED] Order #${order.orderNumber} -> ${session.url}`);
 
-        return res.status(400).json({
-          success: false,
-          message: `Stripe error: ${stripeError.message}`,
-        });
-      }
+      return res.status(200).json({
+        success: true,
+        sessionId: session.id,
+        url: session.url,
+      });
+    } catch (stripeError) {
+      console.error('Stripe checkout error:', stripeError.message);
+      return res.status(400).json({
+        success: false,
+        message: `Stripe error: ${stripeError.message}`,
+      });
     }
   } catch (error) {
     next(error);
@@ -196,6 +209,7 @@ async function verifyCheckoutSession(req, res, next) {
     let isPaymentValid = false;
     let transactionReference = sessionId;
 
+    const stripe = getStripeInstance();
     if (sessionId && sessionId.startsWith('sim_session_')) {
       // Dev sandbox simulated session
       isPaymentValid = true;
@@ -342,7 +356,8 @@ async function processDirectCardPayment(req, res, next) {
       });
     }
 
-    const transactionId = `ch_card_${Date.now()}_${last4}`;
+    const crypto = require('crypto');
+    const transactionId = `ch_card_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
 
     // Execute atomic PostgreSQL transaction (Rule 5)
     const updatedOrder = await prisma.$transaction(async (tx) => {
@@ -352,7 +367,7 @@ async function processDirectCardPayment(req, res, next) {
           where: { id: order.payment.id },
           data: {
             status: 'PAID',
-            method: `STRIPE_${brand.toUpperCase()}`,
+            method: `CARD_${brand.toUpperCase()}`,
             transactionId,
           },
         });
@@ -363,7 +378,7 @@ async function processDirectCardPayment(req, res, next) {
         where: { id: order.id },
         data: {
           paymentStatus: 'PAID',
-          paymentMethod: `Card (${brand} ****${last4})`,
+          paymentMethod: 'Credit / Debit Card',
           status: 'CONFIRMED',
         },
         include: {
@@ -400,7 +415,6 @@ async function processDirectCardPayment(req, res, next) {
       message: 'Card payment processed successfully!',
       order: serializedOrder,
       cardBrand: brand,
-      last4,
     });
   } catch (error) {
     next(error);

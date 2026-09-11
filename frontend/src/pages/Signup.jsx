@@ -59,10 +59,18 @@ export default function Signup() {
   const verifyOtpMutation = useMutation({
     mutationFn: verifyOtpApi,
     onSuccess: (data) => {
-      if (data.user && data.token) {
-        setAuth(data.user, data.token);
-        queryClient.invalidateQueries({ queryKey: ['cart'] });
-        navigate(redirectUrl, { replace: true });
+      if (data?.user) {
+        setAuth(data.user);
+        try {
+          queryClient.invalidateQueries();
+        } catch {
+          // ignore
+        }
+        const redirectParam = searchParams.get('redirect');
+        const targetDestination = redirectParam && redirectParam.startsWith('/checkout') ? redirectParam : '/';
+        navigate(targetDestination, { replace: true });
+      } else {
+        navigate('/', { replace: true });
       }
     },
     onError: (err) => {
@@ -118,8 +126,15 @@ export default function Signup() {
       return;
     }
 
+    const targetEmail = (registeredEmail || formData.email || searchParams.get('email') || '').trim().toLowerCase();
+
+    if (!targetEmail) {
+      setErrorMessage('Email address missing. Please go back and re-enter your email.');
+      return;
+    }
+
     verifyOtpMutation.mutate({
-      email: registeredEmail,
+      email: targetEmail,
       otp: cleanOtp,
     });
   };
@@ -137,9 +152,11 @@ export default function Signup() {
         {/* Logo and Heading */}
         <div className="text-center">
           <Link to="/" className="inline-flex items-center gap-2 group mb-4">
-            <div className="w-12 h-12 rounded-full bg-[#6a9739]/10 flex items-center justify-center text-[#6a9739] group-hover:bg-[#6a9739] group-hover:text-white transition-colors">
-              <Leaf className="w-7 h-7" />
-            </div>
+            <img
+              src="/image.png"
+              alt="Organic Store"
+              className="h-12 w-auto object-contain transition-transform duration-200 group-hover:scale-105"
+            />
           </Link>
           <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">
             {step === 'otp' ? 'Enter Verification Code' : 'Create Your Account'}

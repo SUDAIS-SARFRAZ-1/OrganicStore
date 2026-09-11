@@ -186,10 +186,37 @@ async function createReview(req, res, next) {
       });
     }
 
-    if (!comment || typeof comment !== 'string' || comment.trim().length < 5) {
+    const stripHtml = (txt) => (typeof txt === 'string' ? txt.replace(/<[^>]*>?/gm, '').trim() : '');
+    const cleanComment = stripHtml(comment);
+    const cleanTitle = title ? stripHtml(title) : null;
+
+    if (!cleanComment || cleanComment.length < 5) {
       return res.status(400).json({
         success: false,
         message: 'Review comment must be at least 5 characters long.',
+      });
+    }
+
+    if (cleanComment.length > 1000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Review comment cannot exceed 1000 characters.',
+      });
+    }
+
+    if (cleanTitle && cleanTitle.length > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Review title cannot exceed 100 characters.',
+      });
+    }
+
+    // Spam / malicious script pattern check (Item 16)
+    const spamPattern = /(<script|javascript:|data:text\/html|onload=|onerror=)/i;
+    if (spamPattern.test(comment) || (title && spamPattern.test(title))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Review contains prohibited content or script tags.',
       });
     }
 
@@ -238,15 +265,15 @@ async function createReview(req, res, next) {
       });
     }
 
-    // 4. Create review
+    // 4. Create review with moderation by default (Item 16)
     const newReview = await prisma.review.create({
       data: {
         userId,
         productId,
         rating: numRating,
-        title: title ? title.trim() : null,
-        comment: comment.trim(),
-        isApproved: true, // Verified buyer reviews are automatically approved
+        title: cleanTitle,
+        comment: cleanComment,
+        isApproved: false, // Moderated by default; reviewed in Admin Reviews
       },
       include: {
         user: {
@@ -257,6 +284,12 @@ async function createReview(req, res, next) {
           },
         },
       },
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Thank you! Your verified review has been submitted and will appear once reviewed by our team.',
+      review: newReview,
     });
 
     return res.status(201).json({

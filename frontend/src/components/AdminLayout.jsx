@@ -53,34 +53,31 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen bg-[#f4f6f8] flex">
       {/* Mobile Sidebar Backdrop */}
-      {sidebarOpen && (
-        <div
-          onClick={() => setSidebarOpen(false)}
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs lg:hidden"
-        />
-      )}
+      <div
+        onClick={() => setSidebarOpen(false)}
+        className={`fixed inset-0 z-40 bg-black/50 backdrop-blur-xs lg:hidden transition-opacity duration-300 ease-in-out ${
+          sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+      />
 
       {/* Sidebar Navigation */}
       <aside
-        className={`fixed lg:sticky top-0 inset-y-0 left-0 z-50 w-64 bg-[#1e293b] text-slate-300 flex flex-col justify-between transition-transform duration-200 ease-in-out ${
+        className={`fixed lg:sticky top-0 inset-y-0 left-0 z-50 w-64 bg-[#1e293b] text-slate-300 flex flex-col justify-between transform transition-transform duration-300 ease-in-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         } h-screen shadow-xl`}
       >
         <div>
           {/* Brand Header */}
           <div className="h-20 flex items-center justify-between px-6 border-b border-slate-800 bg-[#0f172a]/50">
-            <Link to="/admin/dashboard" className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-[#6a9739] flex items-center justify-center text-white shadow-xs">
-                <Leaf className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-base font-black text-white tracking-tight leading-none block">
-                  Organic<span className="text-[#8bc34a]">.</span>Store
-                </span>
-                <span className="text-[10px] uppercase font-bold tracking-widest text-[#8bc34a]">
-                  Admin Portal
-                </span>
-              </div>
+            <Link to="/admin/dashboard" className="flex items-center gap-3 group">
+              <img
+                src="/image.png"
+                alt="Organic Store"
+                className="h-9 w-auto object-contain transition-transform duration-200 group-hover:scale-105"
+              />
+              <span className="text-[10px] uppercase font-bold tracking-widest text-[#8bc34a] bg-[#8bc34a]/10 px-2 py-0.5 rounded-full border border-[#8bc34a]/20">
+                Admin
+              </span>
             </Link>
 
             <button

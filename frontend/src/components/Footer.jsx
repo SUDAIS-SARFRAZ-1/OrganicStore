@@ -15,11 +15,11 @@ export default function Footer() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           {/* Brand & Tagline */}
           <div className="flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
-            <Link to="/" className="inline-flex items-center">
+            <Link to="/" className="inline-flex items-center group">
               <img
-                src="/logo-white.svg"
+                src="/image.png"
                 alt="Organic Store"
-                className="h-8 w-auto object-contain"
+                className="h-10 w-auto object-contain transition-transform duration-200 group-hover:scale-105"
               />
             </Link>
             <span className="hidden sm:inline text-gray-600">|</span>

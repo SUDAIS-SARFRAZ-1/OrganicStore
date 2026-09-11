@@ -324,16 +324,37 @@ async function createProduct(req, res, next) {
       });
     }
 
+    // Security (Item 17): Strictly validate image URLs to permit only HTTPS or safe relative paths
+    const isValidImageUrl = (urlStr) => {
+      if (!urlStr || typeof urlStr !== 'string') return false;
+      const trimmed = urlStr.trim();
+      if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.includes('\\')) return true;
+      try {
+        const parsed = new URL(trimmed);
+        return parsed.protocol === 'https:';
+      } catch {
+        return false;
+      }
+    };
+
     // Prepare images data
     const imageCreates = [];
     if (Array.isArray(images) && images.length > 0) {
-      images.forEach((img, idx) => {
+      for (let idx = 0; idx < images.length; idx++) {
+        const img = images[idx];
+        const rawUrl = typeof img === 'string' ? img : img.url;
+        if (!isValidImageUrl(rawUrl)) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid image URL: "${rawUrl}". Only secure HTTPS links or valid internal paths are allowed.`,
+          });
+        }
         imageCreates.push({
-          url: typeof img === 'string' ? img : img.url,
+          url: rawUrl.trim(),
           isPrimary: typeof img === 'object' ? Boolean(img.isPrimary) : idx === 0,
           sortOrder: idx,
         });
-      });
+      }
     }
 
     const product = await prisma.product.create({
@@ -435,12 +456,34 @@ async function updateProduct(req, res, next) {
       updateData.slug = finalSlug;
     }
 
-    // Handle image updates if provided
+    // Handle image updates if provided (Item 17)
     if (Array.isArray(images)) {
+      const isValidImageUrl = (urlStr) => {
+        if (!urlStr || typeof urlStr !== 'string') return false;
+        const trimmed = urlStr.trim();
+        if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.includes('\\')) return true;
+        try {
+          const parsed = new URL(trimmed);
+          return parsed.protocol === 'https:';
+        } catch {
+          return false;
+        }
+      };
+
+      for (const img of images) {
+        const rawUrl = typeof img === 'string' ? img : img.url;
+        if (!isValidImageUrl(rawUrl)) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid image URL: "${rawUrl}". Only secure HTTPS links or valid internal paths are allowed.`,
+          });
+        }
+      }
+
       await prisma.productImage.deleteMany({ where: { productId: id } });
       const imageCreates = images.map((img, idx) => ({
         productId: id,
-        url: typeof img === 'string' ? img : img.url,
+        url: (typeof img === 'string' ? img : img.url).trim(),
         isPrimary: typeof img === 'object' ? Boolean(img.isPrimary) : idx === 0,
         sortOrder: idx,
       }));
@@ -469,7 +512,9 @@ async function updateProduct(req, res, next) {
 
 /**
  * DELETE /api/products/:id (Admin only)
- * Deletes a product or deactivates it if orders exist
+ * Permanently deletes a product from the database.
+ * Preserves historical orders by setting OrderItem.productId to null while keeping
+ * snapshot product names and pricing. Cleans up carts, wishlists, images, and reviews.
  */
 async function deleteProduct(req, res, next) {
   try {
@@ -477,32 +522,50 @@ async function deleteProduct(req, res, next) {
 
     const existing = await prisma.product.findUnique({
       where: { id },
-      include: {
-        orderItems: { select: { id: true }, take: 1 },
-      },
+      select: { id: true, name: true },
     });
 
     if (!existing) {
       return res.status(404).json({ success: false, message: 'Product not found.' });
     }
 
-    // If order history exists, softly deactivate instead of breaking order foreign keys
-    if (existing.orderItems.length > 0) {
-      await prisma.product.update({
-        where: { id },
-        data: { isActive: false },
+    // Execute atomic deletion transaction (Rule 5)
+    await prisma.$transaction(async (tx) => {
+      // 1. Detach from order history so past orders preserve their invoice snapshots
+      await tx.orderItem.updateMany({
+        where: { productId: id },
+        data: { productId: null },
       });
-      return res.status(200).json({
-        success: true,
-        message: `Product '${existing.name}' has existing order history. It has been deactivated.`,
-      });
-    }
 
-    await prisma.product.delete({ where: { id } });
+      // 2. Remove from all carts
+      await tx.cartItem.deleteMany({
+        where: { productId: id },
+      });
+
+      // 3. Remove from wishlists
+      await tx.wishlistItem.deleteMany({
+        where: { productId: id },
+      });
+
+      // 4. Remove associated reviews
+      await tx.review.deleteMany({
+        where: { productId: id },
+      });
+
+      // 5. Remove associated images
+      await tx.productImage.deleteMany({
+        where: { productId: id },
+      });
+
+      // 6. Permanently delete the product record from the database
+      await tx.product.delete({
+        where: { id },
+      });
+    });
 
     return res.status(200).json({
       success: true,
-      message: `Product '${existing.name}' deleted successfully.`,
+      message: `Product '${existing.name}' has been permanently deleted from the database.`,
     });
   } catch (error) {
     next(error);

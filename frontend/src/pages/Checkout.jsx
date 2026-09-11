@@ -17,7 +17,7 @@ import {
 import { getCart } from '../services/cartApi';
 import { createOrder } from '../services/orderApi';
 import { validateCoupon } from '../services/couponApi';
-import { processDirectCardPayment } from '../services/paymentApi';
+import { createStripeCheckoutSession } from '../services/paymentApi';
 import { useAuthStore } from '../store/authStore';
 
 export default function Checkout() {
@@ -47,51 +47,17 @@ export default function Checkout() {
   const [notes, setNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('COD');
   const [isRedirectingToStripe, setIsRedirectingToStripe] = useState(false);
-  const [cardDetails, setCardDetails] = useState({
-    cardholderName: user?.name || '',
-    cardNumber: '',
-    expiry: '',
-    cvc: '',
-  });
 
   const [couponCodeInput, setCouponCodeInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(location.state?.appliedCoupon || null);
   const [couponError, setCouponError] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleCardNumberChange = (e) => {
-    const raw = e.target.value.replace(/\D/g, '').slice(0, 16);
-    const formatted = raw.match(/.{1,4}/g)?.join(' ') || raw;
-    setCardDetails((prev) => ({ ...prev, cardNumber: formatted }));
-  };
-
-  const handleExpiryChange = (e) => {
-    let raw = e.target.value.replace(/\D/g, '').slice(0, 4);
-    if (raw.length >= 3) {
-      raw = raw.slice(0, 2) + '/' + raw.slice(2);
-    }
-    setCardDetails((prev) => ({ ...prev, expiry: raw }));
-  };
-
-  const handleCvcChange = (e) => {
-    const raw = e.target.value.replace(/\D/g, '').slice(0, 4);
-    setCardDetails((prev) => ({ ...prev, cvc: raw }));
-  };
-
-  const fillTestCard = () => {
-    setCardDetails({
-      cardholderName: shippingAddress.recipientName || user?.name || 'Organic Shopper',
-      cardNumber: '4242 4242 4242 4242',
-      expiry: '12/28',
-      cvc: '123',
-    });
-  };
-
   // Check if redirected back due to Stripe cancellation
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get('cancelled') === 'true') {
-      setErrorMessage('Online payment was interrupted. You can choose Cash on Delivery or retry Stripe payment below.');
+      setErrorMessage('Online payment was cancelled. You can choose Cash on Delivery or retry Stripe checkout below.');
     }
   }, [location.search]);
 
@@ -119,21 +85,18 @@ export default function Checkout() {
       if (paymentMethod === 'STRIPE') {
         try {
           setIsRedirectingToStripe(true);
-          const payRes = await processDirectCardPayment({
-            orderId: newOrder.id,
-            cardholderName: cardDetails.cardholderName,
-            cardNumber: cardDetails.cardNumber,
-            expiry: cardDetails.expiry,
-            cvc: cardDetails.cvc,
-          });
+          const sessionRes = await createStripeCheckoutSession(newOrder.id);
 
-          if (payRes?.order) {
-            navigate(`/order-success/${newOrder.orderNumber}`, { state: { order: payRes.order } });
+          if (sessionRes?.url) {
+            // Redirect to real Stripe hosted payment page
+            window.location.href = sessionRes.url;
             return;
+          } else {
+            throw new Error('Could not obtain Stripe checkout session URL.');
           }
-        } catch (cardErr) {
+        } catch (stripeErr) {
           setIsRedirectingToStripe(false);
-          setErrorMessage(cardErr.message || 'Card payment processing failed. Please check your card details.');
+          setErrorMessage(stripeErr.message || 'Failed to redirect to Stripe. Please try again or select Cash on Delivery.');
           return;
         }
       }
@@ -173,26 +136,6 @@ export default function Checkout() {
     if (!cart.items || cart.items.length === 0) {
       setErrorMessage('Your cart is empty. Please add items before checking out.');
       return;
-    }
-
-    if (paymentMethod === 'STRIPE') {
-      if (!cardDetails.cardholderName.trim()) {
-        setErrorMessage('Please enter the Cardholder Name on your debit/credit card.');
-        return;
-      }
-      const cleanNum = cardDetails.cardNumber.replace(/\s+/g, '');
-      if (cleanNum.length < 15) {
-        setErrorMessage('Please enter a valid 16-digit Card Number.');
-        return;
-      }
-      if (cardDetails.expiry.length < 5) {
-        setErrorMessage('Please enter Card Expiry Date (MM/YY).');
-        return;
-      }
-      if (cardDetails.cvc.length < 3) {
-        setErrorMessage('Please enter a valid 3-digit CVC security code.');
-        return;
-      }
     }
 
     orderMutation.mutate({
@@ -463,95 +406,39 @@ export default function Checkout() {
                   </div>
                 </div>
 
-                {/* Option B: Embedded Card Inputs when STRIPE is selected */}
+                {/* Stripe Hosted Checkout Notice when STRIPE is selected */}
                 {paymentMethod === 'STRIPE' && (
-                  <div className="mt-4 p-5 rounded-xl border border-blue-200 bg-linear-to-b from-blue-50/50 to-white space-y-4">
+                  <div className="mt-4 p-5 rounded-xl border border-blue-200 bg-linear-to-b from-blue-50/60 to-white space-y-3.5">
                     <div className="flex items-center justify-between gap-2 border-b border-blue-100 pb-3">
                       <div className="flex items-center gap-2">
                         <CreditCard className="w-4 h-4 text-blue-600" />
                         <span className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-                          Debit / Credit Card Details
+                          Official Stripe Payment Gateway
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={fillTestCard}
-                        className="text-[11px] font-semibold text-blue-700 bg-blue-100/80 hover:bg-blue-200 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
-                      >
-                        ⚡ Fill Demo Card
-                      </button>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                        Cardholder Name
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. John Doe"
-                        value={cardDetails.cardholderName}
-                        onChange={(e) =>
-                          setCardDetails((prev) => ({ ...prev, cardholderName: e.target.value }))
-                        }
-                        className="w-full px-3.5 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-[#6a9739] shadow-2xs"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                        Card Number
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          placeholder="1234 5678 9012 3456"
-                          maxLength={19}
-                          value={cardDetails.cardNumber}
-                          onChange={handleCardNumberChange}
-                          className="w-full px-3.5 py-2 text-sm font-mono tracking-wider bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-[#6a9739] shadow-2xs"
-                        />
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-xs text-gray-400 font-semibold pointer-events-none">
-                          <span className="text-blue-700 font-black italic">VISA</span>
-                          <span className="text-orange-500 font-black">MC</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                          Expiry Date (MM/YY)
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="MM/YY"
-                          maxLength={5}
-                          value={cardDetails.expiry}
-                          onChange={handleExpiryChange}
-                          className="w-full px-3.5 py-2 text-sm font-mono text-center bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-[#6a9739] shadow-2xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                          CVC / Security Code
-                        </label>
-                        <input
-                          type="password"
-                          placeholder="123"
-                          maxLength={4}
-                          value={cardDetails.cvc}
-                          onChange={handleCvcChange}
-                          className="w-full px-3.5 py-2 text-sm font-mono text-center bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-[#6a9739] shadow-2xs"
-                        />
-                      </div>
-                    </div>
-
-                    <p className="text-[10px] text-gray-500 flex items-center gap-1 pt-1">
-                      <Lock className="w-3 h-3 text-emerald-600 shrink-0" />
-                      <span>
-                        Direct Card Gateway: Your card credentials are securely processed and verified.
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3" /> Live & Verified
                       </span>
-                    </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-700 leading-relaxed font-medium">
+                        When you click <strong className="text-gray-900 font-bold">"Proceed to Stripe Checkout"</strong>, you will be redirected to Stripe's official 256-bit encrypted checkout page to complete your payment safely.
+                      </p>
+                      
+                      <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-gray-500">
+                        <span className="font-semibold text-gray-600">Accepted:</span>
+                        <span className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[11px] font-bold text-blue-700 italic">VISA</span>
+                        <span className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[11px] font-bold text-orange-500">Mastercard</span>
+                        <span className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[11px] font-bold text-blue-500">American Express</span>
+                        <span className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[11px] font-bold text-red-600">UnionPay</span>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-blue-100 flex items-center gap-1.5 text-[11px] text-gray-500">
+                      <Lock className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span>End-to-end PCI-DSS Level 1 certified checkout handled directly by Stripe.</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -700,13 +587,13 @@ export default function Checkout() {
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       <span>
-                        {paymentMethod === 'STRIPE' ? 'Processing Card Payment...' : 'Placing Your Order...'}
+                        {paymentMethod === 'STRIPE' ? 'Opening Stripe Checkout...' : 'Placing Your Order...'}
                       </span>
                     </>
                   ) : paymentMethod === 'STRIPE' ? (
                     <span className="flex items-center gap-2">
                       <CreditCard className="w-4 h-4" />
-                      <span>Pay with Card (₨ {grandTotal.toFixed(2)})</span>
+                      <span>Proceed to Stripe Checkout (₨ {grandTotal.toFixed(2)})</span>
                     </span>
                   ) : (
                     <span>Confirm & Place Order (COD)</span>

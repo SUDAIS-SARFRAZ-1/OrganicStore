@@ -10,10 +10,12 @@ import {
   X,
   FileSpreadsheet,
   Printer,
+  ChevronDown,
 } from 'lucide-react';
 import { getAdminOrders, updateOrderStatus, exportAdminOrders } from '../../services/adminApi';
 import ConfirmModal from '../../components/ConfirmModal';
 import PackingSlipModal from '../../components/PackingSlipModal';
+import { formatOrderDate, formatDateForCsv } from '../../utils/dateUtils';
 
 export default function Orders() {
   const queryClient = useQueryClient();
@@ -151,7 +153,7 @@ export default function Orders() {
 
         return [
           o.orderNumber,
-          new Date(o.createdAt).toLocaleDateString('en-GB'),
+          formatDateForCsv(o.createdAt),
           o.status,
           o.customer?.name || '',
           o.customer?.phone || '',
@@ -379,12 +381,8 @@ export default function Orders() {
                       </span>
                     </td>
 
-                    <td className="py-3.5 px-4 text-gray-600">
-                      {new Date(o.createdAt).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
+                    <td className="py-3.5 px-4 text-gray-600 font-medium">
+                      {formatOrderDate(o.createdAt, false)}
                     </td>
 
                     <td className="py-3.5 px-4 font-black text-gray-900">
@@ -409,19 +407,22 @@ export default function Orders() {
                     </td>
 
                     <td className="py-3.5 px-4">
-                      <select
-                        value={o.status}
-                        onChange={(e) => handleStatusChange(o.id, e.target.value)}
-                        disabled={o.status === 'CANCELLED' || o.status === 'DELIVERED'}
-                        className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border focus:outline-none cursor-pointer disabled:cursor-not-allowed ${getStatusBadge(o.status)}`}
-                      >
-                        <option value="PENDING">PENDING</option>
-                        <option value="CONFIRMED">CONFIRMED</option>
-                        <option value="PROCESSING">PROCESSING</option>
-                        <option value="SHIPPED">SHIPPED</option>
-                        <option value="DELIVERED">DELIVERED</option>
-                        <option value="CANCELLED">CANCELLED</option>
-                      </select>
+                      <div className="relative inline-block w-full min-w-[130px]">
+                        <select
+                          value={o.status}
+                          onChange={(e) => handleStatusChange(o.id, e.target.value)}
+                          disabled={o.status === 'CANCELLED' || o.status === 'DELIVERED'}
+                          className={`w-full appearance-none text-[11px] font-bold pl-2.5 pr-7 py-1.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-black/10 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 transition-all ${getStatusBadge(o.status)}`}
+                        >
+                          <option value="PENDING">PENDING</option>
+                          <option value="CONFIRMED">CONFIRMED</option>
+                          <option value="PROCESSING">PROCESSING</option>
+                          <option value="SHIPPED">SHIPPED</option>
+                          <option value="DELIVERED">DELIVERED</option>
+                          <option value="CANCELLED">CANCELLED</option>
+                        </select>
+                        <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-60" />
+                      </div>
                     </td>
 
                     <td className="py-3.5 px-4 text-right">
@@ -489,8 +490,8 @@ export default function Orders() {
                 {selectedOrder.status}
               </span>
             </div>
-            <p className="text-gray-400 mb-6">
-              Placed on {new Date(selectedOrder.createdAt).toLocaleString()}
+            <p className="text-gray-500 mb-6 font-medium">
+              Placed on {formatOrderDate(selectedOrder.createdAt)}
             </p>
 
             {/* Customer & Shipping Details */}

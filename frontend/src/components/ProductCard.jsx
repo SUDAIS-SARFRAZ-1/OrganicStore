@@ -83,9 +83,10 @@ export default function ProductCard({ product, onAddToCart }) {
             onClick={() => onAddToCart && onAddToCart(product)}
             disabled={!product.inStock}
             aria-label={`Add ${product.name} to cart`}
-            className="p-2 rounded-lg bg-gray-50 text-gray-700 hover:bg-[#6a9739] hover:text-white disabled:opacity-40 disabled:hover:bg-gray-50 disabled:hover:text-gray-700 transition-colors duration-150 cursor-pointer disabled:cursor-not-allowed shadow-2xs"
+            className="px-2.5 py-2 sm:px-3 sm:py-2 rounded-xl bg-gray-50 text-gray-700 hover:bg-[#6a9739] hover:text-white active:scale-90 hover:shadow-sm disabled:opacity-40 disabled:hover:bg-gray-50 disabled:hover:text-gray-700 transition-all duration-200 cursor-pointer disabled:cursor-not-allowed shadow-2xs group/btn flex items-center gap-1.5"
           >
-            <ShoppingBag className="w-4 h-4" />
+            <ShoppingBag className="w-4 h-4 transition-transform duration-200 group-hover/btn:scale-110" />
+            <span className="hidden sm:inline text-xs font-bold">Add</span>
           </button>
         </div>
       </div>

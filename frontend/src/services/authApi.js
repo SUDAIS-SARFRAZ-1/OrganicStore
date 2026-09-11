@@ -28,6 +28,14 @@ export async function resendVerificationApi({ email }) {
   return api.post('/auth/resend-verification', { email });
 }
 
+export async function forgotPasswordApi({ email }) {
+  return api.post('/auth/forgot-password', { email });
+}
+
+export async function resetPasswordApi({ email, code, newPassword }) {
+  return api.post('/auth/reset-password', { email, code, newPassword });
+}
+
 export async function logoutUser() {
   return api.post('/auth/logout');
 }
@@ -35,3 +43,4 @@ export async function logoutUser() {
 export async function getMe() {
   return api.get('/auth/me');
 }
+

@@ -1,4 +1,5 @@
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const { prisma } = require('../config/db');
 
 /**
@@ -122,17 +123,17 @@ async function changePassword(req, res, next) {
       });
     }
 
-    if (newPassword.length < 6) {
+    if (newPassword.length < 8) {
       return res.status(400).json({
         success: false,
-        message: 'New password must be at least 6 characters long.',
+        message: 'New password must be at least 8 characters long.',
       });
     }
 
     // Retrieve user's current passwordHash
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { passwordHash: true },
+      select: { passwordHash: true, role: true, tokenVersion: true },
     });
 
     if (!user) {
@@ -150,17 +151,37 @@ async function changePassword(req, res, next) {
       });
     }
 
-    // Hash new password with salt rounds 10
-    const newHash = await bcrypt.hash(newPassword, 10);
+    // Hash new password with salt rounds 12 (Security upgrade)
+    const newHash = await bcrypt.hash(newPassword, 12);
 
-    await prisma.user.update({
+    // Update password and bump tokenVersion to invalidate any other existing sessions (Item 9)
+    const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { passwordHash: newHash },
+      data: {
+        passwordHash: newHash,
+        tokenVersion: { increment: 1 },
+      },
+      select: { id: true, role: true, tokenVersion: true },
+    });
+
+    // Re-issue cookie for the current session with new tokenVersion
+    const token = jwt.sign(
+      { id: updatedUser.id, role: updatedUser.role, tokenVersion: updatedUser.tokenVersion },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/',
     });
 
     return res.status(200).json({
       success: true,
-      message: 'Password changed successfully.',
+      message: 'Password changed successfully. All other sessions have been logged out.',
     });
   } catch (error) {
     next(error);

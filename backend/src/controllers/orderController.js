@@ -112,6 +112,36 @@ async function createOrder(req, res, next) {
           const meetsMinOrder = subtotal >= Number(coupon.minOrderAmount);
 
           if (isValidWindow && hasRemainingUsage && meetsMinOrder) {
+            // Check per-user limit: 1 redemption per customer (Item 12)
+            const userUsedCount = await tx.order.count({
+              where: {
+                userId,
+                couponId: coupon.id,
+                status: { not: 'CANCELLED' },
+              },
+            });
+
+            if (userUsedCount >= 1) {
+              throw new Error(`You have already redeemed coupon "${coupon.code}". Limited to 1 use per customer.`);
+            }
+
+            // Atomic conditional update on timesUsed to prevent race conditions (Item 12)
+            const updatedCoupon = await tx.coupon.updateMany({
+              where: {
+                id: coupon.id,
+                isActive: true,
+                OR: [
+                  { usageLimit: null },
+                  { timesUsed: { lt: coupon.usageLimit } },
+                ],
+              },
+              data: { timesUsed: { increment: 1 } },
+            });
+
+            if (updatedCoupon.count === 0) {
+              throw new Error(`The coupon "${coupon.code}" has reached its maximum usage limit.`);
+            }
+
             couponId = coupon.id;
             const discountVal = Number(coupon.discountValue);
 
@@ -127,12 +157,6 @@ async function createOrder(req, res, next) {
             }
 
             discountAmount = Math.round(discountAmount * 100) / 100;
-
-            // Increment coupon usage
-            await tx.coupon.update({
-              where: { id: coupon.id },
-              data: { timesUsed: { increment: 1 } },
-            });
           }
         }
       }
@@ -219,14 +243,24 @@ async function createOrder(req, res, next) {
         },
       });
 
-      // 7. Decrement product inventory (Rule 5)
+      // 7. Atomic decrement product inventory (Item 11: prevents negative stock under concurrent checkouts)
       for (const item of cart.items) {
-        await tx.product.update({
-          where: { id: item.productId },
+        const updateResult = await tx.product.updateMany({
+          where: {
+            id: item.productId,
+            isActive: true,
+            stock: { gte: item.quantity },
+          },
           data: {
             stock: { decrement: item.quantity },
           },
         });
+
+        if (updateResult.count === 0) {
+          throw new Error(
+            `Insufficient stock for "${item.product.name}". The item sold out while processing your checkout.`
+          );
+        }
       }
 
       // 8. Empty the user's cart
@@ -713,11 +747,12 @@ async function confirmDelivery(req, res, next) {
       return res.status(404).json({ success: false, message: 'Order not found.' });
     }
 
-    // Only owner of the order or Admin can confirm delivery
-    if (existing.userId !== userId && userRole !== 'ADMIN') {
+    // Security (Item 13): Only Store Admin or logistics personnel can mark orders DELIVERED.
+    // Customers cannot self-confirm delivery to convert unpaid COD into PAID.
+    if (userRole !== 'ADMIN') {
       return res.status(403).json({
         success: false,
-        message: 'You are not authorized to confirm delivery for this order.',
+        message: 'Forbidden: Only store administrators or delivery staff can confirm order delivery.',
       });
     }
 
@@ -776,7 +811,7 @@ async function confirmDelivery(req, res, next) {
 
 /**
  * PUT /api/orders/:id/cancel
- * Customer cancels their own order (allowed when PENDING or CONFIRMED), or Admin cancels.
+ * Customer cancels their own order (strictly PENDING and UNPAID), or Admin cancels.
  * In a Prisma transaction:
  * - Restores inventory stock for all products
  * - Marks status CANCELLED and paymentStatus FAILED
@@ -818,12 +853,21 @@ async function cancelOrder(req, res, next) {
       });
     }
 
-    // Customer can only cancel before parcel is in transit
-    if (userRole !== 'ADMIN' && (existing.status === 'PROCESSING' || existing.status === 'SHIPPED')) {
-      return res.status(400).json({
-        success: false,
-        message: 'Your order is already being processed or shipped and cannot be cancelled directly. Please contact customer support.',
-      });
+    // Security (Item 13): Customer can only cancel PENDING UNPAID orders.
+    // Confirmed or paid orders require administrator review and refund processing.
+    if (userRole !== 'ADMIN') {
+      if (existing.status !== 'PENDING') {
+        return res.status(400).json({
+          success: false,
+          message: 'Orders that have already been confirmed or entered fulfillment cannot be cancelled directly. Please contact customer support.',
+        });
+      }
+      if (existing.paymentStatus === 'PAID') {
+        return res.status(400).json({
+          success: false,
+          message: 'Paid orders cannot be automatically cancelled. Please contact support to process a formal cancellation and refund.',
+        });
+      }
     }
 
     const updated = await prisma.$transaction(async (tx) => {

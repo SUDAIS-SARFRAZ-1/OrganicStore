@@ -1,10 +1,12 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
 import AccountLayout from './components/AccountLayout';
 import AdminLayout from './components/AdminLayout';
+import { useAuthStore } from './store/authStore';
+import { getMe } from './services/authApi';
 
 // Core Customer Pages (eagerly loaded for instant first paint)
 import Home from './pages/Home';
@@ -17,6 +19,8 @@ import OrderSuccess from './pages/OrderSuccess';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import VerifyEmail from './pages/VerifyEmail';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import About from './pages/About';
 import Contact from './pages/Contact';
 
@@ -51,6 +55,22 @@ function PageLoader() {
 export default function App() {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin');
+  const { isAuthenticated, setAuth, logout } = useAuthStore();
+
+  useEffect(() => {
+    // If the client state indicates authenticated, verify cookie session with server
+    if (isAuthenticated) {
+      getMe()
+        .then((res) => {
+          if (res?.user) {
+            setAuth(res.user);
+          }
+        })
+        .catch(() => {
+          logout();
+        });
+    }
+  }, []);
 
   return (
     <div className={`min-h-screen flex flex-col ${isAdminRoute ? 'bg-[#f4f6f8]' : 'bg-[#f8f6f3]'} text-[#333333]`}>
@@ -67,6 +87,8 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route
               path="/checkout"
               element={

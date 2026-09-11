@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Mail, Phone, MapPin, Clock, Send, CheckCircle, MessageSquare, HelpCircle } from 'lucide-react';
+import { Mail, Phone, MapPin, Clock, Send, CheckCircle, MessageSquare, HelpCircle, ChevronDown, Loader2 } from 'lucide-react';
+import api from '../services/api';
 
 export default function Contact() {
   const [formData, setFormData] = useState({
@@ -10,12 +11,17 @@ export default function Contact() {
     message: '',
   });
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitted(true);
-    // Reset form after short display
-    setTimeout(() => {
+    setErrorMessage('');
+    setLoading(true);
+
+    try {
+      await api.post('/contact', formData);
+      setSubmitted(true);
       setFormData({
         name: '',
         email: '',
@@ -23,7 +29,11 @@ export default function Contact() {
         subject: 'General Inquiry',
         message: '',
       });
-    }, 1000);
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed to send message. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const contactCards = [
@@ -199,16 +209,19 @@ export default function Contact() {
                     <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
                       Topic / Subject
                     </label>
-                    <select
-                      value={formData.subject}
-                      onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:outline-hidden focus:border-[#6a9739] focus:ring-1 focus:ring-[#6a9739] text-sm bg-white"
-                    >
-                      <option value="General Inquiry">General Inquiry</option>
-                      <option value="Order Status">Order Status &amp; Delivery</option>
-                      <option value="Wholesale">Wholesale &amp; Bulk Orders</option>
-                      <option value="Farmer Partnership">Farming / Sourcing Partnership</option>
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={formData.subject}
+                        onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                        className="w-full appearance-none pl-4 pr-10 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-[#6a9739] focus:ring-2 focus:ring-[#6a9739]/20 text-xs sm:text-sm font-medium bg-white text-gray-800 cursor-pointer transition-all shadow-2xs"
+                      >
+                        <option value="General Inquiry">General Inquiry</option>
+                        <option value="Order Status">Order Status &amp; Delivery</option>
+                        <option value="Wholesale">Wholesale &amp; Bulk Orders</option>
+                        <option value="Farmer Partnership">Farming / Sourcing Partnership</option>
+                      </select>
+                      <ChevronDown className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" />
+                    </div>
                   </div>
                 </div>
 
@@ -226,12 +239,28 @@ export default function Contact() {
                   />
                 </div>
 
+                {errorMessage && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg">
+                    {errorMessage}
+                  </div>
+                )}
+
                 <button
                   type="submit"
-                  className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-8 py-3.5 bg-[#6a9739] hover:bg-[#58802d] text-white font-bold rounded-lg shadow-sm transition-colors text-sm cursor-pointer"
+                  disabled={loading}
+                  className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-8 py-3.5 bg-[#6a9739] hover:bg-[#58802d] disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow-sm transition-colors text-sm cursor-pointer"
                 >
-                  <Send className="w-4 h-4" />
-                  <span>Send Inquiry</span>
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Sending...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      <span>Send Inquiry</span>
+                    </>
+                  )}
                 </button>
               </form>
             )}

@@ -48,10 +48,14 @@ model User {
   phone         String?
   avatar        String?
   role                Role           @default(CUSTOMER)
-  isVerified          Boolean        @default(true)
-  verificationToken   String?        @unique
-  verificationExpires DateTime?
-  createdAt           DateTime       @default(now())
+  isVerified          Boolean        @default(false)
+  verificationToken    String?        @unique
+  verificationExpires  DateTime?
+  resetPasswordToken   String?
+  resetPasswordExpires DateTime?
+  tokenVersion         Int            @default(1)
+  failedOtpAttempts    Int            @default(0)
+  createdAt            DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
   addresses           Address[]
   orders              Order[]
@@ -62,6 +66,7 @@ model User {
   @@index([email])
   @@index([role])
   @@index([verificationToken])
+  @@index([resetPasswordToken])
 }
 
 model Address {
@@ -230,8 +235,8 @@ model OrderItem {
   id          String   @id @default(uuid())
   orderId     String
   order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId   String
-  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
   productName String
   quantity    Int
   unitPrice   Decimal  @db.Decimal(10, 2)

@@ -31,9 +31,10 @@ export default function VerifyEmail() {
   const verifyTokenMutation = useMutation({
     mutationFn: (tok) => verifyEmailApi({ token: tok }),
     onSuccess: (data) => {
-      if (data?.user && data?.token) {
-        setAuth(data.user, data.token);
+      if (data?.user) {
+        setAuth(data.user);
         queryClient.invalidateQueries({ queryKey: ['cart'] });
+        navigate('/', { replace: true });
       }
     },
   });
@@ -41,9 +42,10 @@ export default function VerifyEmail() {
   const verifyOtpMutation = useMutation({
     mutationFn: verifyOtpApi,
     onSuccess: (data) => {
-      if (data?.user && data?.token) {
-        setAuth(data.user, data.token);
+      if (data?.user) {
+        setAuth(data.user);
         queryClient.invalidateQueries({ queryKey: ['cart'] });
+        navigate('/', { replace: true });
       }
     },
   });
@@ -93,9 +95,11 @@ export default function VerifyEmail() {
         {/* Logo */}
         <div className="text-center">
           <Link to="/" className="inline-flex items-center gap-2 group mb-4">
-            <div className="w-12 h-12 rounded-full bg-[#6a9739]/10 flex items-center justify-center text-[#6a9739] group-hover:bg-[#6a9739] group-hover:text-white transition-colors">
-              <Leaf className="w-7 h-7" />
-            </div>
+            <img
+              src="/image.png"
+              alt="Organic Store"
+              className="h-12 w-auto object-contain transition-transform duration-200 group-hover:scale-105"
+            />
           </Link>
         </div>
 

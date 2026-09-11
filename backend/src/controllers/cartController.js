@@ -11,7 +11,9 @@ const { prisma } = require('../config/db');
  */
 async function resolveCart(req, res) {
   let cart = null;
-  const guestCartId = req.headers['x-cart-id'] || (req.cookies && req.cookies.guest_cart_id);
+  // Security (Item 10): Only read from cryptographically signed HTTP-only cookie.
+  // Never accept client-supplied x-cart-id header or unsigned cookies.
+  const guestCartId = req.signedCookies && req.signedCookies.guest_cart_id;
 
   if (req.user) {
     // 1. Authenticated customer cart
@@ -25,7 +27,7 @@ async function resolveCart(req, res) {
       });
     }
 
-    // Check if there was a guest cart that should be merged
+    // Check if there was a legitimate signed guest cart that should be merged
     if (guestCartId && guestCartId !== cart.id) {
       const guestCart = await prisma.cart.findFirst({
         where: { id: guestCartId, userId: null },
@@ -67,7 +69,12 @@ async function resolveCart(req, res) {
 
         // Clear guest cookie
         if (res.clearCookie) {
-          res.clearCookie('guest_cart_id');
+          res.clearCookie('guest_cart_id', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/',
+          });
         }
       }
     }
@@ -89,7 +96,9 @@ async function resolveCart(req, res) {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
+          signed: true, // Signed cookie prevents tampering and UUID enumeration
           maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+          path: '/',
         });
       }
     }
@@ -131,10 +140,28 @@ async function buildCartResponse(cartId) {
 
   if (!cart) return null;
 
+  // Clean up any orphaned items whose product was deleted
+  const validItems = [];
+  const orphanedIds = [];
+
+  for (const item of cart.items) {
+    if (!item.product) {
+      orphanedIds.push(item.id);
+    } else {
+      validItems.push(item);
+    }
+  }
+
+  if (orphanedIds.length > 0) {
+    await prisma.cartItem.deleteMany({
+      where: { id: { in: orphanedIds } },
+    });
+  }
+
   let totalItems = 0;
   let subtotal = 0;
 
-  const items = cart.items.map((item) => {
+  const items = validItems.map((item) => {
     const product = item.product;
     const basePrice = Number(product.price);
     const salePrice = product.salePrice !== null ? Number(product.salePrice) : null;
@@ -351,9 +378,11 @@ async function removeCartItem(req, res, next) {
     });
 
     if (!item) {
-      return res.status(404).json({
-        success: false,
-        message: 'Cart item not found.',
+      const updatedCart = await buildCartResponse(cart.id);
+      return res.status(200).json({
+        success: true,
+        message: 'Item has already been removed from cart.',
+        cart: updatedCart,
       });
     }
 

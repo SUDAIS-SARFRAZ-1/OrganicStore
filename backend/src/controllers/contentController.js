@@ -81,6 +81,20 @@ async function getBrandLogos(req, res, next) {
 
 // ─── ADMIN: Home Sections ─────────────────────────────────────────
 
+// Security (Item 17): Strictly validate image and link URLs
+function isValidSafeUrl(urlStr) {
+  if (!urlStr || typeof urlStr !== 'string') return true;
+  const trimmed = urlStr.trim();
+  if (trimmed === '') return true;
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.includes('\\')) return true;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 /**
  * ADMIN: Create home section
  * POST /api/admin/home/sections
@@ -91,6 +105,14 @@ async function createHomeSection(req, res, next) {
 
     if (!type || !title) {
       return res.status(400).json({ success: false, message: 'type and title are required.' });
+    }
+
+    if (bannerImage && !isValidSafeUrl(bannerImage)) {
+      return res.status(400).json({ success: false, message: 'Invalid bannerImage URL. Must be a secure HTTPS link or valid path.' });
+    }
+
+    if (linkUrl && !isValidSafeUrl(linkUrl)) {
+      return res.status(400).json({ success: false, message: 'Invalid linkUrl. Must be a valid link.' });
     }
 
     const validTypes = ['BEST_SELLING', 'TRENDING', 'CATEGORY_BANNER', 'PROMO_BANNER', 'DEAL_OF_DAY'];
@@ -143,6 +165,14 @@ async function updateHomeSection(req, res, next) {
       if (!validTypes.includes(type)) {
         return res.status(400).json({ success: false, message: `Invalid type. Must be one of: ${validTypes.join(', ')}` });
       }
+    }
+
+    if (bannerImage && !isValidSafeUrl(bannerImage)) {
+      return res.status(400).json({ success: false, message: 'Invalid bannerImage URL. Must be a secure HTTPS link or valid path.' });
+    }
+
+    if (linkUrl && !isValidSafeUrl(linkUrl)) {
+      return res.status(400).json({ success: false, message: 'Invalid linkUrl. Must be a valid link.' });
     }
 
     const existing = await prisma.homeSection.findUnique({ where: { id } });
@@ -236,6 +266,10 @@ async function createTestimonial(req, res, next) {
       return res.status(400).json({ success: false, message: 'rating must be between 1 and 5.' });
     }
 
+    if (avatarUrl && !isValidSafeUrl(avatarUrl)) {
+      return res.status(400).json({ success: false, message: 'Invalid avatarUrl. Must be a secure HTTPS link or valid path.' });
+    }
+
     const testimonial = await prisma.testimonial.create({
       data: {
         authorName,
@@ -264,6 +298,10 @@ async function updateTestimonial(req, res, next) {
 
     if (rating !== undefined && (rating < 1 || rating > 5)) {
       return res.status(400).json({ success: false, message: 'rating must be between 1 and 5.' });
+    }
+
+    if (avatarUrl && !isValidSafeUrl(avatarUrl)) {
+      return res.status(400).json({ success: false, message: 'Invalid avatarUrl. Must be a secure HTTPS link or valid path.' });
     }
 
     const existing = await prisma.testimonial.findUnique({ where: { id } });
@@ -390,6 +428,14 @@ async function createBrandLogo(req, res, next) {
       return res.status(400).json({ success: false, message: 'name and logoUrl are required.' });
     }
 
+    if (!isValidSafeUrl(logoUrl)) {
+      return res.status(400).json({ success: false, message: 'Invalid logoUrl. Must be a secure HTTPS link or valid path.' });
+    }
+
+    if (websiteUrl && !isValidSafeUrl(websiteUrl)) {
+      return res.status(400).json({ success: false, message: 'Invalid websiteUrl. Must be a valid link.' });
+    }
+
     const brand = await prisma.brandLogo.create({
       data: {
         name,
@@ -413,6 +459,14 @@ async function updateBrandLogo(req, res, next) {
   try {
     const { id } = req.params;
     const { name, logoUrl, websiteUrl, sortOrder, isActive } = req.body;
+
+    if (logoUrl && !isValidSafeUrl(logoUrl)) {
+      return res.status(400).json({ success: false, message: 'Invalid logoUrl. Must be a secure HTTPS link or valid path.' });
+    }
+
+    if (websiteUrl && !isValidSafeUrl(websiteUrl)) {
+      return res.status(400).json({ success: false, message: 'Invalid websiteUrl. Must be a valid link.' });
+    }
 
     const existing = await prisma.brandLogo.findUnique({ where: { id } });
     if (!existing) {

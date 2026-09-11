@@ -41,24 +41,32 @@ export default function MiniCartDrawer() {
     };
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   const items = cart?.items || [];
   const totalItems = cart?.totalItems || 0;
   const subtotal = cart?.subtotal || 0;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden">
+    <div
+      className={`fixed inset-0 z-50 overflow-hidden transition-all duration-300 ${
+        isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+      }`}
+    >
       {/* Backdrop */}
       <div
         onClick={closeDrawer}
-        className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity duration-200 cursor-pointer"
+        className={`fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity duration-300 ease-in-out cursor-pointer ${
+          isOpen ? 'opacity-100' : 'opacity-0'
+        }`}
         aria-hidden="true"
       />
 
       {/* Slide-out Drawer Panel */}
-      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-        <aside className="w-screen max-w-md bg-white shadow-2xl flex flex-col transform transition-transform duration-200 ease-out">
+      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10 pointer-events-none">
+        <aside
+          className={`w-screen max-w-md bg-white shadow-2xl flex flex-col pointer-events-auto transform transition-transform duration-300 ease-in-out ${
+            isOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
+        >
           {/* Header */}
           <div className="p-5 border-b border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-2">

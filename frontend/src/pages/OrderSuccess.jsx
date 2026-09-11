@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useParams, Link } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Truck, ArrowRight, MapPin, Leaf, ShieldCheck } from 'lucide-react';
 import { getOrderById } from '../services/orderApi';
 import { verifyStripeCheckoutSession } from '../services/paymentApi';
