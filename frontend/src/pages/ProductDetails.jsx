@@ -1,15 +1,33 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProduct } from '../services/productApi';
+import { addToCart } from '../services/cartApi';
+import { useCartDrawerStore } from '../store/cartDrawerStore';
 import Rating from '../components/Rating';
 import ProductCard from '../components/ProductCard';
+import ReviewSection from '../components/ReviewSection';
 import { ChevronRight, ShoppingBag, Truck, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 export default function ProductDetails() {
   const { identifier } = useParams();
   const [selectedImage, setSelectedImage] = useState(null);
   const [quantity, setQuantity] = useState(1);
+  const [justAdded, setJustAdded] = useState(false);
+
+  const queryClient = useQueryClient();
+  const { openDrawer } = useCartDrawerStore();
+
+  const addMutation = useMutation({
+    mutationFn: addToCart,
+    onSuccess: (updatedCart) => {
+      queryClient.setQueryData(['cart'], updatedCart);
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
+      setJustAdded(true);
+      setTimeout(() => setJustAdded(false), 1200);
+      openDrawer();
+    },
+  });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['product', identifier],
@@ -152,26 +170,40 @@ export default function ProductDetails() {
                   <button
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
                     disabled={quantity <= 1}
-                    className="px-3.5 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-40 cursor-pointer"
+                    className="px-3.5 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-40 cursor-pointer btn-tactile"
                   >
                     -
                   </button>
-                  <span className="px-4 py-2 text-sm font-bold text-gray-800">{quantity}</span>
+                  <span className="px-4 py-2 text-sm font-bold text-gray-800 select-none">{quantity}</span>
                   <button
                     onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
                     disabled={quantity >= product.stock}
-                    className="px-3.5 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-40 cursor-pointer"
+                    className="px-3.5 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-40 cursor-pointer btn-tactile"
                   >
                     +
                   </button>
                 </div>
 
                 <button
-                  disabled={!product.inStock}
-                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-[#6a9739] hover:bg-[#58802d] text-white font-bold rounded-lg shadow-sm disabled:opacity-40 transition-colors cursor-pointer"
+                  onClick={() => addMutation.mutate({ productId: product.id, quantity })}
+                  disabled={!product.inStock || addMutation.isPending}
+                  className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-8 py-3.5 font-bold rounded-lg shadow-sm disabled:opacity-40 transition-all duration-200 cursor-pointer btn-tactile ${
+                    justAdded
+                      ? 'bg-green-700 text-white animate-check-pulse'
+                      : 'bg-[#6a9739] hover:bg-[#58802d] text-white hover:shadow-md'
+                  }`}
                 >
-                  <ShoppingBag className="w-5 h-5" />
-                  Add to Cart
+                  {justAdded ? (
+                    <>
+                      <CheckCircle2 className="w-5 h-5" />
+                      <span>Added to Basket!</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingBag className="w-5 h-5" />
+                      <span>{addMutation.isPending ? 'Adding...' : 'Add to Cart'}</span>
+                    </>
+                  )}
                 </button>
               </div>
 
@@ -190,6 +222,11 @@ export default function ProductDetails() {
           </div>
         </div>
 
+        {/* Purchase-Gated Customer Reviews Section */}
+        <div className="mt-16">
+          <ReviewSection productId={product.id} productName={product.name} />
+        </div>
+
         {/* Related Products Row */}
         {relatedProducts.length > 0 && (
           <div className="mt-16">
@@ -203,7 +240,11 @@ export default function ProductDetails() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {relatedProducts.map((relProduct) => (
-                <ProductCard key={relProduct.id} product={relProduct} />
+                <ProductCard
+                  key={relProduct.id}
+                  product={relProduct}
+                  onAddToCart={(p) => addMutation.mutate({ productId: p.id, quantity: 1 })}
+                />
               ))}
             </div>
           </div>

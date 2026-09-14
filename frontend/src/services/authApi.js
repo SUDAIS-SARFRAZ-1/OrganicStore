@@ -11,6 +11,31 @@ export async function registerUser({ name, email, password, phone }) {
   return api.post('/auth/register', { name, email, password, phone });
 }
 
+export async function verifyOtpApi({ email, otp }) {
+  return api.post('/auth/verify-otp', { email, otp });
+}
+
+export async function resendOtpApi({ email }) {
+  return api.post('/auth/resend-otp', { email });
+}
+
+// Backwards compatibility functions
+export async function verifyEmailApi({ token }) {
+  return api.post('/auth/verify-email', { token });
+}
+
+export async function resendVerificationApi({ email }) {
+  return api.post('/auth/resend-verification', { email });
+}
+
+export async function forgotPasswordApi({ email }) {
+  return api.post('/auth/forgot-password', { email });
+}
+
+export async function resetPasswordApi({ email, code, newPassword }) {
+  return api.post('/auth/reset-password', { email, code, newPassword });
+}
+
 export async function logoutUser() {
   return api.post('/auth/logout');
 }
@@ -18,3 +43,4 @@ export async function logoutUser() {
 export async function getMe() {
   return api.get('/auth/me');
 }
+

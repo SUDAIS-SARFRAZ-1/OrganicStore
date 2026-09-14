@@ -1,22 +1,26 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { queryClient } from '../queryClient';
+import { clearGuestCartId } from '../services/cartApi';
+import { logoutUser } from '../services/authApi';
 
 /**
  * Zustand Auth Store (Client/UI State only - Rule 10)
- * Manages active session, auth token, and client user profile snapshot.
+ * Manages client user profile snapshot and UI authentication state.
+ * SECURITY (Item 5): JWT tokens are NEVER stored in localStorage or Zustand.
+ * Sessions are strictly HTTP-only, secure, sameSite cookies.
  */
 export const useAuthStore = create(
   persist(
     (set) => ({
       user: null,
-      token: null,
       isAuthenticated: false,
 
-      setAuth: (user, token) =>
+      // Accept user object (token parameter ignored for security - cookie-only sessions)
+      setAuth: (user) =>
         set({
-          user,
-          token,
-          isAuthenticated: Boolean(user && token),
+          user: user || null,
+          isAuthenticated: Boolean(user),
         }),
 
       updateUser: (updatedFields) =>
@@ -24,18 +28,35 @@ export const useAuthStore = create(
           user: state.user ? { ...state.user, ...updatedFields } : null,
         })),
 
-      logout: () =>
+      logout: async () => {
+        // 1. Notify backend to clear HTTP-only auth and guest cookies
+        try {
+          await logoutUser();
+        } catch {
+          // Ignore network errors during logout
+        }
+
+        // 2. Remove guest cart pointer
+        clearGuestCartId();
+
+        // 3. Completely flush React Query cache so subsequent logins NEVER see previous member's data
+        try {
+          queryClient.clear();
+        } catch {
+          // Ignore if queryClient is not initialized
+        }
+
+        // 4. Reset auth state in memory and localStorage
         set({
           user: null,
-          token: null,
           isAuthenticated: false,
-        }),
+        });
+      },
     }),
     {
       name: 'organic_store_auth',
       partialize: (state) => ({
         user: state.user,
-        token: state.token,
         isAuthenticated: state.isAuthenticated,
       }),
     }

@@ -47,17 +47,26 @@ model User {
   name          String
   phone         String?
   avatar        String?
-  role          Role           @default(CUSTOMER)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  addresses     Address[]
-  orders        Order[]
-  cart          Cart?
-  wishlistItems WishlistItem[]
-  reviews       Review[]
+  role                Role           @default(CUSTOMER)
+  isVerified          Boolean        @default(false)
+  verificationToken    String?        @unique
+  verificationExpires  DateTime?
+  resetPasswordToken   String?
+  resetPasswordExpires DateTime?
+  tokenVersion         Int            @default(1)
+  failedOtpAttempts    Int            @default(0)
+  createdAt            DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  addresses           Address[]
+  orders              Order[]
+  cart                Cart?
+  wishlistItems       WishlistItem[]
+  reviews             Review[]
 
   @@index([email])
   @@index([role])
+  @@index([verificationToken])
+  @@index([resetPasswordToken])
 }
 
 model Address {
@@ -226,8 +235,8 @@ model OrderItem {
   id          String   @id @default(uuid())
   orderId     String
   order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId   String
-  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
   productName String
   quantity    Int
   unitPrice   Decimal  @db.Decimal(10, 2)

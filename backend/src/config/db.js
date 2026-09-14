@@ -13,7 +13,7 @@ const adapter = new PrismaPg(pool);
 
 const prisma = new PrismaClient({
   adapter,
-  log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
+  log: process.env.DEBUG_SQL === 'true' ? ['query', 'warn', 'error'] : ['error'],
 });
 
 module.exports = {

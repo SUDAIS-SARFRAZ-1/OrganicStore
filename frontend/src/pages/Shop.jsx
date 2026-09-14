@@ -1,16 +1,33 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProducts } from '../services/productApi';
 import { getCategories } from '../services/categoryApi';
+import { addToCart } from '../services/cartApi';
+import { useCartDrawerStore } from '../store/cartDrawerStore';
 import ProductGrid from '../components/ProductGrid';
 import ProductFilters from '../components/ProductFilters';
 import SortDropdown from '../components/SortDropdown';
 import SearchBar from '../components/SearchBar';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 
 export default function Shop() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const queryClient = useQueryClient();
+  const { openDrawer } = useCartDrawerStore();
+
+  const addMutation = useMutation({
+    mutationFn: addToCart,
+    onSuccess: (updatedCart) => {
+      queryClient.setQueryData(['cart'], updatedCart);
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
+      openDrawer();
+    },
+  });
+
+  const handleAddToCart = (product) => {
+    addMutation.mutate({ productId: product.id, quantity: 1 });
+  };
 
   // URL state sync
   const categoryParam = searchParams.get('category') || 'all';
@@ -42,7 +59,7 @@ export default function Shop() {
   // Fetch categories for sidebar filter
   const { data: categories = [] } = useQuery({
     queryKey: ['categories'],
-    queryFn: getCategories,
+    queryFn: () => getCategories({ includeFallback: true }),
     staleTime: 1000 * 60 * 10,
   });
 
@@ -118,14 +135,24 @@ export default function Shop() {
           {/* Catalog Listing Area */}
           <main className="lg:col-span-3 space-y-6">
             {/* Sorting & Filter Summary Bar */}
-            <div className="bg-white rounded-xl px-5 py-3 border border-gray-100 shadow-xs flex items-center justify-between">
-              <span className="text-xs text-gray-500 font-medium">
-                {categoryParam !== 'all' ? (
-                  <>Category: <span className="font-bold text-[#6a9739] capitalize">{categoryParam}</span></>
-                ) : (
-                  'All Categories'
-                )}
-              </span>
+            <div className="bg-white rounded-2xl px-5 py-3.5 border border-gray-100 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="relative w-full sm:w-56 shrink-0">
+                  <select
+                    value={categoryParam}
+                    onChange={(e) => updateQuery({ category: e.target.value })}
+                    className="w-full appearance-none pl-3.5 pr-8 py-2 text-xs font-semibold bg-gray-50 hover:bg-gray-100/70 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:border-[#6a9739] focus:ring-2 focus:ring-[#6a9739]/20 text-gray-700 cursor-pointer transition-all shadow-2xs"
+                  >
+                    <option value="all">All Categories ({categories.reduce((s, c) => s + (c.productCount || 0), 0)})</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.slug}>
+                        {c.name} ({c.productCount || 0})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" />
+                </div>
+              </div>
 
               <SortDropdown
                 value={sortParam}
@@ -137,6 +164,7 @@ export default function Shop() {
             <ProductGrid
               products={products}
               isLoading={isLoading}
+              onAddToCart={handleAddToCart}
             />
 
             {/* Pagination Controls */}

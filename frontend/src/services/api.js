@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { useAuthStore } from '../store/authStore';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
@@ -8,30 +9,19 @@ const api = axios.create({
   },
 });
 
-// Request interceptor: attach JWT token if available
-api.interceptors.request.use(
-  (config) => {
-    const rawAuth = localStorage.getItem('organic_store_auth');
-    if (rawAuth) {
-      try {
-        const parsed = JSON.parse(rawAuth);
-        const token = parsed?.state?.token;
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-      } catch {
-        // Ignore JSON parse errors
-      }
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// Response interceptor: centralized error extraction
+// Response interceptor: centralized error extraction & session expiry handler
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
+    // If backend reports token expired or unauthorized, automatically clear session and query cache
+    if (error.response?.status === 401) {
+      try {
+        useAuthStore.getState().logout();
+      } catch {
+        // Ignore
+      }
+    }
+
     const message =
       error.response?.data?.message ||
       error.message ||

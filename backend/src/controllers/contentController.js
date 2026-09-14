@@ -81,6 +81,20 @@ async function getBrandLogos(req, res, next) {
 
 // ─── ADMIN: Home Sections ─────────────────────────────────────────
 
+// Security (Item 17): Strictly validate image and link URLs
+function isValidSafeUrl(urlStr) {
+  if (!urlStr || typeof urlStr !== 'string') return true;
+  const trimmed = urlStr.trim();
+  if (trimmed === '') return true;
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.includes('\\')) return true;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 /**
  * ADMIN: Create home section
  * POST /api/admin/home/sections
@@ -91,6 +105,14 @@ async function createHomeSection(req, res, next) {
 
     if (!type || !title) {
       return res.status(400).json({ success: false, message: 'type and title are required.' });
+    }
+
+    if (bannerImage && !isValidSafeUrl(bannerImage)) {
+      return res.status(400).json({ success: false, message: 'Invalid bannerImage URL. Must be a secure HTTPS link or valid path.' });
+    }
+
+    if (linkUrl && !isValidSafeUrl(linkUrl)) {
+      return res.status(400).json({ success: false, message: 'Invalid linkUrl. Must be a valid link.' });
     }
 
     const validTypes = ['BEST_SELLING', 'TRENDING', 'CATEGORY_BANNER', 'PROMO_BANNER', 'DEAL_OF_DAY'];
@@ -143,6 +165,14 @@ async function updateHomeSection(req, res, next) {
       if (!validTypes.includes(type)) {
         return res.status(400).json({ success: false, message: `Invalid type. Must be one of: ${validTypes.join(', ')}` });
       }
+    }
+
+    if (bannerImage && !isValidSafeUrl(bannerImage)) {
+      return res.status(400).json({ success: false, message: 'Invalid bannerImage URL. Must be a secure HTTPS link or valid path.' });
+    }
+
+    if (linkUrl && !isValidSafeUrl(linkUrl)) {
+      return res.status(400).json({ success: false, message: 'Invalid linkUrl. Must be a valid link.' });
     }
 
     const existing = await prisma.homeSection.findUnique({ where: { id } });
@@ -236,6 +266,10 @@ async function createTestimonial(req, res, next) {
       return res.status(400).json({ success: false, message: 'rating must be between 1 and 5.' });
     }
 
+    if (avatarUrl && !isValidSafeUrl(avatarUrl)) {
+      return res.status(400).json({ success: false, message: 'Invalid avatarUrl. Must be a secure HTTPS link or valid path.' });
+    }
+
     const testimonial = await prisma.testimonial.create({
       data: {
         authorName,
@@ -264,6 +298,10 @@ async function updateTestimonial(req, res, next) {
 
     if (rating !== undefined && (rating < 1 || rating > 5)) {
       return res.status(400).json({ success: false, message: 'rating must be between 1 and 5.' });
+    }
+
+    if (avatarUrl && !isValidSafeUrl(avatarUrl)) {
+      return res.status(400).json({ success: false, message: 'Invalid avatarUrl. Must be a secure HTTPS link or valid path.' });
     }
 
     const existing = await prisma.testimonial.findUnique({ where: { id } });
@@ -310,6 +348,94 @@ async function deleteTestimonial(req, res, next) {
   }
 }
 
+/**
+ * ADMIN: Bulk update or reorder testimonials according to preference
+ * PUT /api/admin/home/testimonials
+ */
+async function updateHomeTestimonialsBulk(req, res, next) {
+  try {
+    const { testimonials } = req.body;
+    if (!Array.isArray(testimonials)) {
+      return res.status(400).json({ success: false, message: 'testimonials array is required.' });
+    }
+
+    for (let i = 0; i < testimonials.length; i++) {
+      const t = testimonials[i];
+      if (!t.authorName || typeof t.authorName !== 'string' || !t.authorName.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: `Testimonial at index ${i} is missing a valid authorName.`,
+        });
+      }
+      if (!t.content || typeof t.content !== 'string' || !t.content.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: `Testimonial at index ${i} is missing valid content.`,
+        });
+      }
+      const parsedRating = parseInt(t.rating, 10);
+      if (t.rating !== undefined && (isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5)) {
+        return res.status(400).json({
+          success: false,
+          message: `Testimonial at index ${i} has an invalid rating (must be between 1 and 5).`,
+        });
+      }
+      if (t.avatarUrl && !isValidSafeUrl(t.avatarUrl)) {
+        return res.status(400).json({
+          success: false,
+          message: `Testimonial at index ${i} has an invalid avatarUrl (must be a secure HTTPS URL or valid path).`,
+        });
+      }
+    }
+
+    const updates = testimonials.map((t, idx) => {
+      const authorName = t.authorName.trim();
+      const content = t.content.trim();
+      const authorRole = t.authorRole ? String(t.authorRole).trim() : null;
+      const rating = parseInt(t.rating, 10) || 5;
+      const avatarUrl = t.avatarUrl ? String(t.avatarUrl).trim() : null;
+      const sortOrder = t.sortOrder !== undefined ? parseInt(t.sortOrder, 10) : idx;
+      const isActive = t.isActive !== undefined ? Boolean(t.isActive) : true;
+
+      return prisma.testimonial.upsert({
+        where: { id: t.id || 'temp-id-' + idx },
+        update: {
+          authorName,
+          authorRole,
+          rating,
+          content,
+          avatarUrl,
+          sortOrder,
+          isActive,
+        },
+        create: {
+          authorName,
+          authorRole,
+          rating,
+          content,
+          avatarUrl,
+          sortOrder,
+          isActive,
+        },
+      });
+    });
+
+    await prisma.$transaction(updates);
+
+    const allTestimonials = await prisma.testimonial.findMany({
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    res.json({
+      success: true,
+      message: 'Testimonials updated successfully.',
+      testimonials: allTestimonials,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 // ─── ADMIN: Brand Logos ───────────────────────────────────────────
 
 /**
@@ -339,6 +465,14 @@ async function createBrandLogo(req, res, next) {
       return res.status(400).json({ success: false, message: 'name and logoUrl are required.' });
     }
 
+    if (!isValidSafeUrl(logoUrl)) {
+      return res.status(400).json({ success: false, message: 'Invalid logoUrl. Must be a secure HTTPS link or valid path.' });
+    }
+
+    if (websiteUrl && !isValidSafeUrl(websiteUrl)) {
+      return res.status(400).json({ success: false, message: 'Invalid websiteUrl. Must be a valid link.' });
+    }
+
     const brand = await prisma.brandLogo.create({
       data: {
         name,
@@ -362,6 +496,14 @@ async function updateBrandLogo(req, res, next) {
   try {
     const { id } = req.params;
     const { name, logoUrl, websiteUrl, sortOrder, isActive } = req.body;
+
+    if (logoUrl && !isValidSafeUrl(logoUrl)) {
+      return res.status(400).json({ success: false, message: 'Invalid logoUrl. Must be a secure HTTPS link or valid path.' });
+    }
+
+    if (websiteUrl && !isValidSafeUrl(websiteUrl)) {
+      return res.status(400).json({ success: false, message: 'Invalid websiteUrl. Must be a valid link.' });
+    }
 
     const existing = await prisma.brandLogo.findUnique({ where: { id } });
     if (!existing) {
@@ -416,6 +558,7 @@ module.exports = {
   createTestimonial,
   updateTestimonial,
   deleteTestimonial,
+  updateHomeTestimonialsBulk,
   getAllBrandLogos,
   createBrandLogo,
   updateBrandLogo,
