@@ -8,6 +8,15 @@ const { prisma } = require('../config/db');
  * - Multi-table operations execute within an atomic Prisma transaction.
  */
 
+class BusinessRuleError extends Error {
+  constructor(message, statusCode = 400) {
+    super(message);
+    this.name = 'BusinessRuleError';
+    this.statusCode = statusCode;
+    this.isOperational = true;
+  }
+}
+
 /**
  * Generates a clean, unique human-readable order number (e.g. ORG-260910-4821)
  */
@@ -57,7 +66,7 @@ async function createOrder(req, res, next) {
       });
 
       if (!cart || cart.items.length === 0) {
-        throw new Error('Your cart is empty. Please add products before checking out.');
+        throw new BusinessRuleError('Your cart is empty. Please add products before checking out.');
       }
 
       // 2. Validate product availability and recompute line item pricing (Rule 25)
@@ -68,11 +77,11 @@ async function createOrder(req, res, next) {
         const product = item.product;
 
         if (!product.isActive) {
-          throw new Error(`"${product.name}" is no longer available.`);
+          throw new BusinessRuleError(`"${product.name}" is no longer available.`);
         }
 
         if (product.stock < item.quantity) {
-          throw new Error(
+          throw new BusinessRuleError(
             `Insufficient stock for "${product.name}". Only ${product.stock} units available.`
           );
         }
@@ -105,60 +114,78 @@ async function createOrder(req, res, next) {
           where: { code: trimmedCode },
         });
 
-        if (coupon && coupon.isActive) {
-          const now = new Date();
-          const isValidWindow = now >= new Date(coupon.startsAt) && now <= new Date(coupon.expiresAt);
-          const hasRemainingUsage = !coupon.usageLimit || coupon.timesUsed < coupon.usageLimit;
-          const meetsMinOrder = subtotal >= Number(coupon.minOrderAmount);
-
-          if (isValidWindow && hasRemainingUsage && meetsMinOrder) {
-            // Check per-user limit: 1 redemption per customer (Item 12)
-            const userUsedCount = await tx.order.count({
-              where: {
-                userId,
-                couponId: coupon.id,
-                status: { not: 'CANCELLED' },
-              },
-            });
-
-            if (userUsedCount >= 1) {
-              throw new Error(`You have already redeemed coupon "${coupon.code}". Limited to 1 use per customer.`);
-            }
-
-            // Atomic conditional update on timesUsed to prevent race conditions (Item 12)
-            const updatedCoupon = await tx.coupon.updateMany({
-              where: {
-                id: coupon.id,
-                isActive: true,
-                OR: [
-                  { usageLimit: null },
-                  { timesUsed: { lt: coupon.usageLimit } },
-                ],
-              },
-              data: { timesUsed: { increment: 1 } },
-            });
-
-            if (updatedCoupon.count === 0) {
-              throw new Error(`The coupon "${coupon.code}" has reached its maximum usage limit.`);
-            }
-
-            couponId = coupon.id;
-            const discountVal = Number(coupon.discountValue);
-
-            if (coupon.discountType === 'PERCENTAGE') {
-              let calculated = (subtotal * discountVal) / 100;
-              if (coupon.maxDiscountAmount) {
-                const maxDisc = Number(coupon.maxDiscountAmount);
-                if (calculated > maxDisc) calculated = maxDisc;
-              }
-              discountAmount = calculated;
-            } else if (coupon.discountType === 'FIXED') {
-              discountAmount = Math.min(subtotal, discountVal);
-            }
-
-            discountAmount = Math.round(discountAmount * 100) / 100;
-          }
+        if (!coupon) {
+          throw new BusinessRuleError(`Coupon "${trimmedCode}" does not exist.`);
         }
+
+        if (!coupon.isActive) {
+          throw new BusinessRuleError(`Coupon "${coupon.code}" is no longer active.`);
+        }
+
+        const now = new Date();
+        if (now < new Date(coupon.startsAt)) {
+          throw new BusinessRuleError(`Coupon "${coupon.code}" is not valid yet.`);
+        }
+
+        if (now > new Date(coupon.expiresAt)) {
+          throw new BusinessRuleError(`Coupon "${coupon.code}" has expired.`);
+        }
+
+        if (coupon.usageLimit && coupon.timesUsed >= coupon.usageLimit) {
+          throw new BusinessRuleError(`The coupon "${coupon.code}" has reached its maximum usage limit.`);
+        }
+
+        if (subtotal < Number(coupon.minOrderAmount)) {
+          throw new BusinessRuleError(
+            `Order subtotal (₨ ${subtotal}) does not meet the minimum required amount of ₨ ${coupon.minOrderAmount} for coupon "${coupon.code}".`
+          );
+        }
+
+        // Check per-user limit: 1 redemption per customer (Item 12)
+        const userUsedCount = await tx.order.count({
+          where: {
+            userId,
+            couponId: coupon.id,
+            status: { not: 'CANCELLED' },
+          },
+        });
+
+        if (userUsedCount >= 1) {
+          throw new BusinessRuleError(`You have already redeemed coupon "${coupon.code}". Limited to 1 use per customer.`);
+        }
+
+        // Atomic conditional update on timesUsed to prevent race conditions (Item 12)
+        const updatedCoupon = await tx.coupon.updateMany({
+          where: {
+            id: coupon.id,
+            isActive: true,
+            OR: [
+              { usageLimit: null },
+              { timesUsed: { lt: coupon.usageLimit } },
+            ],
+          },
+          data: { timesUsed: { increment: 1 } },
+        });
+
+        if (updatedCoupon.count === 0) {
+          throw new BusinessRuleError(`The coupon "${coupon.code}" has reached its maximum usage limit.`);
+        }
+
+        couponId = coupon.id;
+        const discountVal = Number(coupon.discountValue);
+
+        if (coupon.discountType === 'PERCENTAGE') {
+          let calculated = (subtotal * discountVal) / 100;
+          if (coupon.maxDiscountAmount) {
+            const maxDisc = Number(coupon.maxDiscountAmount);
+            if (calculated > maxDisc) calculated = maxDisc;
+          }
+          discountAmount = calculated;
+        } else if (coupon.discountType === 'FIXED') {
+          discountAmount = Math.min(subtotal, discountVal);
+        }
+
+        discountAmount = Math.round(discountAmount * 100) / 100;
       }
 
       // 4. Shipping calculation: Free shipping for orders >= ₨ 1,000, otherwise standard ₨ 150
@@ -260,7 +287,7 @@ async function createOrder(req, res, next) {
           });
 
           if (updateResult.count === 0) {
-            throw new Error(
+            throw new BusinessRuleError(
               `Insufficient stock for "${item.product.name}". The item sold out while processing your checkout.`
             );
           }
@@ -274,7 +301,7 @@ async function createOrder(req, res, next) {
           });
 
           if (!currentProd || !currentProd.isActive || currentProd.stock < item.quantity) {
-            throw new Error(
+            throw new BusinessRuleError(
               `Insufficient stock for "${item.product.name}". Only ${currentProd?.stock || 0} unit(s) available.`
             );
           }
@@ -318,14 +345,8 @@ async function createOrder(req, res, next) {
       },
     });
   } catch (error) {
-    // If error was thrown inside transaction (e.g. stock or empty cart), return 400
-    if (
-      error.message &&
-      (error.message.includes('stock') ||
-        error.message.includes('cart') ||
-        error.message.includes('available'))
-    ) {
-      return res.status(400).json({
+    if (error instanceof BusinessRuleError || error.isOperational || error.statusCode === 400) {
+      return res.status(error.statusCode || 400).json({
         success: false,
         message: error.message,
       });
@@ -688,13 +709,19 @@ async function updateOrderStatus(req, res, next) {
 
     // Execute status update with transaction if cancellation restores stock (Rule 5)
     const updatedOrder = await prisma.$transaction(async (tx) => {
-      // If order is cancelled, return items back to product inventory
+      // If order is cancelled, return items back to product inventory only if stock was decremented
       if (status === 'CANCELLED') {
-        for (const item of existing.items) {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: { stock: { increment: item.quantity } },
-          });
+        const stockWasDecremented =
+          (existing.paymentMethod === 'COD' || existing.paymentStatus === 'PAID') &&
+          existing.status !== 'CANCELLED';
+
+        if (stockWasDecremented) {
+          for (const item of existing.items) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { stock: { increment: item.quantity } },
+            });
+          }
         }
 
         if (existing.payment) {

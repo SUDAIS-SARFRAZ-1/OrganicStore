@@ -291,12 +291,6 @@ async function createReview(req, res, next) {
       message: 'Thank you! Your verified review has been submitted and will appear once reviewed by our team.',
       review: newReview,
     });
-
-    return res.status(201).json({
-      success: true,
-      message: 'Thank you! Your verified purchase review has been posted.',
-      review: newReview,
-    });
   } catch (error) {
     next(error);
   }

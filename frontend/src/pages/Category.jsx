@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCategoryBySlug, DEFAULT_CATEGORIES } from '../services/categoryApi';
@@ -5,19 +6,28 @@ import { getProducts } from '../services/productApi';
 import { addToCart } from '../services/cartApi';
 import { useCartDrawerStore } from '../store/cartDrawerStore';
 import ProductGrid from '../components/ProductGrid';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, AlertCircle, X } from 'lucide-react';
 
 export default function Category() {
   const { slug } = useParams();
   const queryClient = useQueryClient();
   const { openDrawer } = useCartDrawerStore();
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const addMutation = useMutation({
     mutationFn: addToCart,
     onSuccess: (updatedCart) => {
+      setErrorMessage(null);
       queryClient.setQueryData(['cart'], updatedCart);
       queryClient.invalidateQueries({ queryKey: ['cart'] });
       openDrawer();
+    },
+    onError: (err) => {
+      const msg = err.response?.data?.message || err.message || 'Failed to add product to cart.';
+      setErrorMessage(msg);
+      setTimeout(() => {
+        setErrorMessage((prev) => (prev === msg ? null : prev));
+      }, 5000);
     },
   });
 
@@ -89,6 +99,23 @@ export default function Category() {
             </div>
           )}
         </div>
+
+        {/* Error Feedback Banner */}
+        {errorMessage && (
+          <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 flex items-center justify-between text-xs font-semibold animate-in fade-in duration-200">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setErrorMessage(null)}
+              className="p-1 text-red-400 hover:text-red-700 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Products Grid */}
         <ProductGrid

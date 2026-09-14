@@ -5,8 +5,8 @@ export default function Footer() {
     { label: 'Shop', to: '/shop' },
     { label: 'About Us', to: '/about' },
     { label: 'Contact Us', to: '/contact' },
-    { label: 'Privacy Policy', to: '/about' },
-    { label: 'Terms', to: '/about' },
+    { label: 'Privacy Policy', to: '/privacy-policy' },
+    { label: 'Terms', to: '/terms' },
   ];
 
   return (

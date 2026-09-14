@@ -42,7 +42,7 @@ export default function ResetPassword() {
     },
     onError: (err) => {
       setErrorMessage(
-        err.response?.data?.message || 'Failed to reset password. Please check your code and try again.'
+        err.message || err.response?.data?.message || 'Failed to reset password. Please check your code and try again.'
       );
     },
   });

@@ -60,7 +60,7 @@ async function authenticate(req, res, next) {
     }
 
     // Check token revocation / session rotation (Item 9)
-    if (decoded.tokenVersion && decoded.tokenVersion !== user.tokenVersion) {
+    if (decoded.tokenVersion === undefined || decoded.tokenVersion !== user.tokenVersion) {
       return res.status(401).json({
         success: false,
         message: 'Session has been invalidated or password was changed. Please log in again.',

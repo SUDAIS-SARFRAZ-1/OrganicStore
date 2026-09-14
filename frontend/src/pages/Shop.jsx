@@ -59,7 +59,7 @@ export default function Shop() {
   // Fetch categories for sidebar filter
   const { data: categories = [] } = useQuery({
     queryKey: ['categories'],
-    queryFn: getCategories,
+    queryFn: () => getCategories({ includeFallback: true }),
     staleTime: 1000 * 60 * 10,
   });
 

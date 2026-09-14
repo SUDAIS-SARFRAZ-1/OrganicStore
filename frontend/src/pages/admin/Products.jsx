@@ -38,10 +38,10 @@ export default function Products() {
   };
   const [formData, setFormData] = useState(initialForm);
 
-  // 1. Fetch Categories for Dropdown
+  // 1. Fetch Categories for Dropdown (exclude fake fallback IDs)
   const { data: categories = [] } = useQuery({
-    queryKey: ['categories'],
-    queryFn: getCategories,
+    queryKey: ['categories', 'admin'],
+    queryFn: () => getCategories({ includeFallback: false }),
   });
 
   // 2. Fetch Products

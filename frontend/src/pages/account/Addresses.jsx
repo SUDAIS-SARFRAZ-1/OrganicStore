@@ -60,7 +60,7 @@ export default function Addresses() {
       closeModal();
     },
     onError: (err) => {
-      setFormError(err.response?.data?.message || 'Failed to save address.');
+      setFormError(err.message || err.response?.data?.message || 'Failed to save address.');
     },
   });
 
@@ -71,7 +71,7 @@ export default function Addresses() {
       closeModal();
     },
     onError: (err) => {
-      setFormError(err.response?.data?.message || 'Failed to update address.');
+      setFormError(err.message || err.response?.data?.message || 'Failed to update address.');
     },
   });
 

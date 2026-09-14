@@ -37,8 +37,8 @@ export default function Categories() {
   const [formData, setFormData] = useState(initialForm);
 
   const { data: categories = [], isLoading, isError, error } = useQuery({
-    queryKey: ['categories'],
-    queryFn: getCategories,
+    queryKey: ['categories', 'admin'],
+    queryFn: () => getCategories({ includeFallback: false }),
   });
 
   const createMutation = useMutation({

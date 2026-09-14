@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -25,21 +25,39 @@ export default function ConfirmModal({
   isAlertOnly = false,
   icon: CustomIcon,
 }) {
-  // Close on Escape key
+  const confirmBtnRef = useRef(null);
+  const previousFocusRef = useRef(null);
+
+  // Focus management and Escape key
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isOpen && !isLoading) {
-        onClose();
-      }
-    };
     if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
+      previousFocusRef.current = document.activeElement;
       document.body.style.overflow = 'hidden';
+
+      // Set focus to primary action button
+      const timer = setTimeout(() => {
+        if (confirmBtnRef.current) {
+          confirmBtnRef.current.focus();
+        }
+      }, 50);
+
+      const handleKeyDown = (e) => {
+        if (e.key === 'Escape' && !isLoading) {
+          onClose();
+        }
+      };
+
+      document.addEventListener('keydown', handleKeyDown);
+
+      return () => {
+        clearTimeout(timer);
+        document.removeEventListener('keydown', handleKeyDown);
+        document.body.style.overflow = 'unset';
+        if (previousFocusRef.current && typeof previousFocusRef.current.focus === 'function') {
+          previousFocusRef.current.focus();
+        }
+      };
     }
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'unset';
-    };
   }, [isOpen, isLoading, onClose]);
 
   if (!isOpen) return null;
@@ -88,15 +106,23 @@ export default function ConfirmModal({
       <div
         className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
         onClick={() => !isLoading && onClose()}
+        aria-hidden="true"
       />
 
       {/* Dialog Card */}
-      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-gray-100 p-6 z-10 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-modal-title"
+        aria-describedby={message ? 'confirm-modal-description' : undefined}
+        className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-gray-100 p-6 z-10 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200"
+      >
         {/* Close Button */}
         {!isLoading && (
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close dialog"
             className="absolute top-4 right-4 p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
@@ -105,14 +131,14 @@ export default function ConfirmModal({
 
         <div className="flex items-start gap-4">
           {/* Icon Badge */}
-          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${vStyles.iconBg}`}>
+          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${vStyles.iconBg}`} aria-hidden="true">
             <IconComponent className="w-6 h-6" />
           </div>
 
           {/* Text Content */}
           <div className="flex-1 pr-4">
-            <h3 className="text-base font-bold text-gray-900 leading-snug">{title}</h3>
-            {message && <p className="mt-1.5 text-xs text-gray-600 leading-relaxed">{message}</p>}
+            <h3 id="confirm-modal-title" className="text-base font-bold text-gray-900 leading-snug">{title}</h3>
+            {message && <p id="confirm-modal-description" className="mt-1.5 text-xs text-gray-600 leading-relaxed">{message}</p>}
           </div>
         </div>
 
@@ -130,6 +156,7 @@ export default function ConfirmModal({
           )}
 
           <button
+            ref={confirmBtnRef}
             type="button"
             disabled={isLoading}
             onClick={() => {

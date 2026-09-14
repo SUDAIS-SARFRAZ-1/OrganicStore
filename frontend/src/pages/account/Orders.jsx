@@ -109,7 +109,7 @@ export default function Orders() {
                 </span>
 
                 <Link
-                  to={`/account/orders/${order.orderNumber}`}
+                  to={`/account/orders/${order.id}`}
                   className="px-3 py-1 bg-white border border-gray-200 hover:border-[#6a9739] text-gray-700 hover:text-[#6a9739] text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-2xs"
                 >
                   View Details

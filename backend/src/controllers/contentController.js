@@ -359,26 +359,63 @@ async function updateHomeTestimonialsBulk(req, res, next) {
       return res.status(400).json({ success: false, message: 'testimonials array is required.' });
     }
 
+    for (let i = 0; i < testimonials.length; i++) {
+      const t = testimonials[i];
+      if (!t.authorName || typeof t.authorName !== 'string' || !t.authorName.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: `Testimonial at index ${i} is missing a valid authorName.`,
+        });
+      }
+      if (!t.content || typeof t.content !== 'string' || !t.content.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: `Testimonial at index ${i} is missing valid content.`,
+        });
+      }
+      const parsedRating = parseInt(t.rating, 10);
+      if (t.rating !== undefined && (isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5)) {
+        return res.status(400).json({
+          success: false,
+          message: `Testimonial at index ${i} has an invalid rating (must be between 1 and 5).`,
+        });
+      }
+      if (t.avatarUrl && !isValidSafeUrl(t.avatarUrl)) {
+        return res.status(400).json({
+          success: false,
+          message: `Testimonial at index ${i} has an invalid avatarUrl (must be a secure HTTPS URL or valid path).`,
+        });
+      }
+    }
+
     const updates = testimonials.map((t, idx) => {
+      const authorName = t.authorName.trim();
+      const content = t.content.trim();
+      const authorRole = t.authorRole ? String(t.authorRole).trim() : null;
+      const rating = parseInt(t.rating, 10) || 5;
+      const avatarUrl = t.avatarUrl ? String(t.avatarUrl).trim() : null;
+      const sortOrder = t.sortOrder !== undefined ? parseInt(t.sortOrder, 10) : idx;
+      const isActive = t.isActive !== undefined ? Boolean(t.isActive) : true;
+
       return prisma.testimonial.upsert({
         where: { id: t.id || 'temp-id-' + idx },
         update: {
-          authorName: t.authorName || 'Verified Customer',
-          authorRole: t.authorRole || null,
-          rating: parseInt(t.rating, 10) || 5,
-          content: t.content || '',
-          avatarUrl: t.avatarUrl || null,
-          sortOrder: t.sortOrder !== undefined ? parseInt(t.sortOrder, 10) : idx,
-          isActive: t.isActive !== undefined ? Boolean(t.isActive) : true,
+          authorName,
+          authorRole,
+          rating,
+          content,
+          avatarUrl,
+          sortOrder,
+          isActive,
         },
         create: {
-          authorName: t.authorName || 'Verified Customer',
-          authorRole: t.authorRole || null,
-          rating: parseInt(t.rating, 10) || 5,
-          content: t.content || '',
-          avatarUrl: t.avatarUrl || null,
-          sortOrder: t.sortOrder !== undefined ? parseInt(t.sortOrder, 10) : idx,
-          isActive: t.isActive !== undefined ? Boolean(t.isActive) : true,
+          authorName,
+          authorRole,
+          rating,
+          content,
+          avatarUrl,
+          sortOrder,
+          isActive,
         },
       });
     });

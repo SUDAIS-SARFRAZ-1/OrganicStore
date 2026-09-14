@@ -104,6 +104,8 @@ export default function Checkout() {
           }
         } catch (stripeErr) {
           setIsRedirectingToStripe(false);
+          // Cancel the created pending order so it is not abandoned in PENDING state
+          await cancelCustomerOrder(newOrder.id).catch(() => {});
           setErrorMessage(stripeErr.message || 'Failed to redirect to Stripe. Please try again or select Cash on Delivery.');
           return;
         }

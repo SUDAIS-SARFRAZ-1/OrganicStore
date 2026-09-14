@@ -261,25 +261,103 @@ async function createCoupon(req, res, next) {
       });
     }
 
+    const normalizedType = String(discountType).trim().toUpperCase();
+    if (normalizedType !== 'PERCENTAGE' && normalizedType !== 'FIXED') {
+      return res.status(400).json({
+        success: false,
+        message: 'discountType must be either "PERCENTAGE" or "FIXED".',
+      });
+    }
+
+    const parsedDiscountValue = parseFloat(discountValue);
+    if (isNaN(parsedDiscountValue) || parsedDiscountValue <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'discountValue must be a positive number greater than 0.',
+      });
+    }
+
+    if (normalizedType === 'PERCENTAGE' && parsedDiscountValue > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Percentage discount cannot exceed 100%.',
+      });
+    }
+
+    let parsedMinOrder = 0;
+    if (minOrderAmount !== undefined) {
+      parsedMinOrder = parseFloat(minOrderAmount);
+      if (isNaN(parsedMinOrder) || parsedMinOrder < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'minOrderAmount must be a non-negative number (>= 0).',
+        });
+      }
+    }
+
+    let parsedMaxDiscount = null;
+    if (maxDiscountAmount !== undefined && maxDiscountAmount !== null && maxDiscountAmount !== '') {
+      parsedMaxDiscount = parseFloat(maxDiscountAmount);
+      if (isNaN(parsedMaxDiscount) || parsedMaxDiscount <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'maxDiscountAmount must be a positive number greater than 0.',
+        });
+      }
+    }
+
+    let parsedUsageLimit = null;
+    if (usageLimit !== undefined && usageLimit !== null && usageLimit !== '') {
+      parsedUsageLimit = parseInt(usageLimit, 10);
+      if (isNaN(parsedUsageLimit) || parsedUsageLimit < 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'usageLimit must be an integer greater than or equal to 1.',
+        });
+      }
+    }
+
     // Default time to end of selected day (23:59:59.999Z) if no specific time was passed
     let resolvedExpiresAt = new Date(expiresAt);
     if (typeof expiresAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(expiresAt.trim())) {
       resolvedExpiresAt = new Date(`${expiresAt.trim()}T23:59:59.999Z`);
     }
 
+    if (isNaN(resolvedExpiresAt.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid expiresAt date format.',
+      });
+    }
+
+    const resolvedStartsAt = startsAt ? new Date(startsAt) : new Date();
+    if (isNaN(resolvedStartsAt.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid startsAt date format.',
+      });
+    }
+
+    if (resolvedExpiresAt < resolvedStartsAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'expiresAt date cannot be earlier than startsAt date.',
+      });
+    }
+
     const created = await prisma.coupon.create({
       data: {
         code: code.trim().toUpperCase(),
-        description: description || null,
-        discountType,
-        discountValue: parseFloat(discountValue),
-        minOrderAmount: minOrderAmount !== undefined ? parseFloat(minOrderAmount) : 0,
-        maxDiscountAmount: maxDiscountAmount ? parseFloat(maxDiscountAmount) : null,
+        description: description ? String(description).trim() : null,
+        discountType: normalizedType,
+        discountValue: parsedDiscountValue,
+        minOrderAmount: parsedMinOrder,
+        maxDiscountAmount: parsedMaxDiscount,
         isPublic: isPublic !== undefined ? Boolean(isPublic) : true,
         isActive: isActive !== undefined ? Boolean(isActive) : true,
-        startsAt: startsAt ? new Date(startsAt) : new Date(),
+        startsAt: resolvedStartsAt,
         expiresAt: resolvedExpiresAt,
-        usageLimit: usageLimit ? parseInt(usageLimit, 10) : null,
+        usageLimit: parsedUsageLimit,
       },
     });
 

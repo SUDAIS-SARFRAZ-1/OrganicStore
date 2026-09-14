@@ -296,13 +296,48 @@ async function updateAddress(req, res, next) {
       return tx.address.update({
         where: { id },
         data: {
-          recipientName: recipientName !== undefined ? recipientName.trim() : existing.recipientName,
-          phone: phone !== undefined ? phone.trim() : existing.phone,
-          street: street !== undefined ? street.trim() : existing.street,
-          city: city !== undefined ? city.trim() : existing.city,
-          state: state !== undefined ? (state ? state.trim() : null) : existing.state,
-          postalCode: postalCode !== undefined ? (postalCode ? postalCode.trim() : '00000') : existing.postalCode,
-          country: country !== undefined ? (country ? country.trim() : 'Pakistan') : existing.country,
+          recipientName:
+            recipientName !== undefined
+              ? typeof recipientName === 'string' && recipientName.trim()
+                ? recipientName.trim()
+                : existing.recipientName
+              : existing.recipientName,
+          phone:
+            phone !== undefined
+              ? typeof phone === 'string' && phone.trim()
+                ? phone.trim()
+                : existing.phone
+              : existing.phone,
+          street:
+            street !== undefined
+              ? typeof street === 'string' && street.trim()
+                ? street.trim()
+                : existing.street
+              : existing.street,
+          city:
+            city !== undefined
+              ? typeof city === 'string' && city.trim()
+                ? city.trim()
+                : existing.city
+              : existing.city,
+          state:
+            state !== undefined
+              ? typeof state === 'string' && state.trim()
+                ? state.trim()
+                : null
+              : existing.state,
+          postalCode:
+            postalCode !== undefined
+              ? typeof postalCode === 'string' && postalCode.trim()
+                ? postalCode.trim()
+                : '00000'
+              : existing.postalCode,
+          country:
+            country !== undefined
+              ? typeof country === 'string' && country.trim()
+                ? country.trim()
+                : 'Pakistan'
+              : existing.country,
           isDefault: isDefault !== undefined ? Boolean(isDefault) : existing.isDefault,
         },
       });

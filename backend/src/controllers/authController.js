@@ -220,8 +220,6 @@ async function register(req, res, next) {
     });
 
     // Send 6-digit OTP email (plaintext sent to inbox, hashed in DB)
-    console.log(`\n================== [OTP CODE DISPATCHED (NEW REGISTRATION)] ==================\nRecipient: ${normalizedEmail}\nOTP Code:  [ ${otp} ]\n==============================================================================\n`);
-
     await sendOtpEmail({
       to: normalizedEmail,
       name: newUser.name,
@@ -274,21 +272,10 @@ async function verifyOtp(req, res, next) {
     }
 
     if (user.isVerified) {
-      // If already verified, sign them in directly via cookie
-      generateTokenAndSetCookie(res, user);
       return res.status(200).json({
         success: true,
-        message: 'Your account is already verified! Welcome back.',
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          phone: user.phone,
-          avatar: user.avatar,
-          isVerified: true,
-          createdAt: user.createdAt,
-        },
+        isAlreadyVerified: true,
+        message: 'Your account is already verified! Please log in with your email and password.',
       });
     }
 
@@ -395,9 +382,9 @@ async function resendOtp(req, res, next) {
     });
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'No account found with this email address. Please sign up first.',
+      return res.status(200).json({
+        success: true,
+        message: 'If an account is associated with this email, a fresh verification code has been dispatched.',
       });
     }
 
@@ -422,8 +409,6 @@ async function resendOtp(req, res, next) {
       },
     });
 
-    console.log(`\n================== [OTP CODE DISPATCHED (RESEND)] ==================\nRecipient: ${user.email}\nOTP Code:  [ ${newOtp} ]\n====================================================================\n`);
-
     await sendOtpEmail({
       to: user.email,
       name: user.name,
@@ -432,7 +417,7 @@ async function resendOtp(req, res, next) {
 
     return res.status(200).json({
       success: true,
-      message: 'A fresh 6-digit verification code has been dispatched to your email.',
+      message: 'If an account is associated with this email, a fresh verification code has been dispatched.',
     });
   } catch (error) {
     next(error);

@@ -20,13 +20,16 @@ export async function getCart() {
   try {
     const response = await api.get('/cart');
     return response.cart;
-  } catch {
-    // Safe empty cart fallback
-    return {
-      items: [],
-      totalItems: 0,
-      subtotal: 0,
-    };
+  } catch (err) {
+    // Only return empty cart structure if cart does not exist (404)
+    if (err.response?.status === 404) {
+      return {
+        items: [],
+        totalItems: 0,
+        subtotal: 0,
+      };
+    }
+    throw err;
   }
 }
 

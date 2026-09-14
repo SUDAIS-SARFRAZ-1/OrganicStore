@@ -42,7 +42,7 @@ export default function Navbar() {
   // Uses DEFAULT_CATEGORIES placeholder/fallback so links never disappear if backend is offline or restarting
   const { data: categories = DEFAULT_CATEGORIES } = useQuery({
     queryKey: ['categories'],
-    queryFn: getCategories,
+    queryFn: () => getCategories({ includeFallback: true }),
     placeholderData: DEFAULT_CATEGORIES,
     staleTime: 1000 * 60 * 10,
   });

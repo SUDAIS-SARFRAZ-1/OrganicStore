@@ -140,7 +140,12 @@ async function createCheckoutSession(req, res, next) {
         cancel_url: `${frontendUrl}/checkout?cancelled=true&order_id=${order.id}`,
       });
 
-      console.log(`[STRIPE CHECKOUT CREATED] Order #${order.orderNumber} -> ${session.url}`);
+      if (order.payment) {
+        await prisma.payment.update({
+          where: { id: order.payment.id },
+          data: { transactionId: session.id },
+        });
+      }
 
       return res.status(200).json({
         success: true,
@@ -210,14 +215,15 @@ async function verifyCheckoutSession(req, res, next) {
     let transactionReference = sessionId;
 
     const stripe = getStripeInstance();
-    if (sessionId && sessionId.startsWith('sim_session_')) {
-      // Dev sandbox simulated session
-      isPaymentValid = true;
-      transactionReference = `ch_sim_${Date.now()}`;
-    } else if (stripe && sessionId) {
+    if (stripe && sessionId) {
       try {
         const session = await stripe.checkout.sessions.retrieve(sessionId);
-        if (session.payment_status === 'paid') {
+        const isMatchingOrder =
+          session.client_reference_id === order.id ||
+          session.metadata?.orderId === order.id ||
+          (order.payment && order.payment.transactionId === session.id);
+
+        if (session.payment_status === 'paid' && isMatchingOrder) {
           isPaymentValid = true;
           transactionReference = session.payment_intent || session.id;
         }
@@ -229,7 +235,7 @@ async function verifyCheckoutSession(req, res, next) {
     if (!isPaymentValid) {
       return res.status(400).json({
         success: false,
-        message: 'Payment verification failed: Payment not confirmed by Stripe.',
+        message: 'Payment verification failed: Payment not confirmed by Stripe or does not match order.',
       });
     }
 
@@ -263,7 +269,7 @@ async function verifyCheckoutSession(req, res, next) {
       // 3. Decrement inventory stock on verified successful payment confirmation
       for (const item of (order.items || [])) {
         if (item.productId) {
-          await tx.product.updateMany({
+          const res = await tx.product.updateMany({
             where: {
               id: item.productId,
               stock: { gte: item.quantity },
@@ -272,6 +278,9 @@ async function verifyCheckoutSession(req, res, next) {
               stock: { decrement: item.quantity },
             },
           });
+          if (res.count === 0) {
+            throw new Error(`Insufficient stock for product ID "${item.productId}" during payment settlement.`);
+          }
         }
       }
 
@@ -374,8 +383,60 @@ async function processDirectCardPayment(req, res, next) {
       });
     }
 
-    const crypto = require('crypto');
-    const transactionId = `ch_card_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
+    const stripe = getStripeInstance();
+    if (!stripe) {
+      return res.status(400).json({
+        success: false,
+        message: 'Direct card processing is unavailable without Stripe configured. Please use Stripe Checkout.',
+      });
+    }
+
+    const expiryParts = expiry.split('/');
+    const expMonth = parseInt(expiryParts[0]?.trim(), 10);
+    const expYearRaw = expiryParts[1]?.trim() || '';
+    const expYear = parseInt(expYearRaw.length === 2 ? '20' + expYearRaw : expYearRaw, 10);
+
+    let paymentIntent;
+    try {
+      const paymentMethodObj = await stripe.paymentMethods.create({
+        type: 'card',
+        card: {
+          number: cleanNumber,
+          exp_month: expMonth,
+          exp_year: expYear,
+          cvc: String(cvc).trim(),
+        },
+      });
+
+      paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.max(100, Math.round(Number(order.totalAmount) * 100)),
+        currency: 'pkr',
+        payment_method: paymentMethodObj.id,
+        confirm: true,
+        automatic_payment_methods: {
+          enabled: true,
+          allow_redirects: 'never',
+        },
+        metadata: {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+        },
+      });
+    } catch (chargeErr) {
+      return res.status(400).json({
+        success: false,
+        message: `Card payment authorization failed: ${chargeErr.message}`,
+      });
+    }
+
+    if (paymentIntent.status !== 'succeeded') {
+      return res.status(400).json({
+        success: false,
+        message: `Payment not completed. Charge status: ${paymentIntent.status}`,
+      });
+    }
+
+    const transactionId = paymentIntent.id;
 
     // Execute atomic PostgreSQL transaction (Rule 5)
     const updatedOrder = await prisma.$transaction(async (tx) => {
@@ -409,7 +470,7 @@ async function processDirectCardPayment(req, res, next) {
       // 3. Decrement inventory stock on verified successful payment
       for (const item of (order.items || [])) {
         if (item.productId) {
-          await tx.product.updateMany({
+          const res = await tx.product.updateMany({
             where: {
               id: item.productId,
               stock: { gte: item.quantity },
@@ -418,6 +479,9 @@ async function processDirectCardPayment(req, res, next) {
               stock: { decrement: item.quantity },
             },
           });
+          if (res.count === 0) {
+            throw new Error(`Insufficient stock for product ID "${item.productId}" during card payment settlement.`);
+          }
         }
       }
 
@@ -454,9 +518,88 @@ async function processDirectCardPayment(req, res, next) {
   }
 }
 
+/**
+ * POST /api/payments/webhook
+ * Stripe webhook handler for checkout.session.completed
+ */
+async function handleStripeWebhook(req, res) {
+  const sig = req.headers['stripe-signature'];
+  const stripe = getStripeInstance();
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  if (!stripe || !webhookSecret) {
+    return res.status(400).json({ error: 'Stripe webhook secret is not configured' });
+  }
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+  } catch (err) {
+    console.error(`Stripe Webhook signature verification failed:`, err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const orderId = session.client_reference_id || session.metadata?.orderId;
+    if (orderId) {
+      try {
+        const order = await prisma.order.findUnique({
+          where: { id: orderId },
+          include: { payment: true, items: true },
+        });
+
+        if (order && order.paymentStatus !== 'PAID') {
+          await prisma.$transaction(async (tx) => {
+            if (order.payment) {
+              await tx.payment.update({
+                where: { id: order.payment.id },
+                data: {
+                  status: 'PAID',
+                  transactionId: session.payment_intent || session.id,
+                },
+              });
+            }
+
+            await tx.order.update({
+              where: { id: order.id },
+              data: {
+                paymentStatus: 'PAID',
+                status: order.status === 'PENDING' ? 'CONFIRMED' : order.status,
+              },
+            });
+
+            for (const item of (order.items || [])) {
+              if (item.productId) {
+                const res = await tx.product.updateMany({
+                  where: {
+                    id: item.productId,
+                    stock: { gte: item.quantity },
+                  },
+                  data: {
+                    stock: { decrement: item.quantity },
+                  },
+                });
+                if (res.count === 0) {
+                  throw new Error(`Insufficient stock for product ID "${item.productId}" during webhook settlement.`);
+                }
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Error processing checkout.session.completed in webhook:', err);
+      }
+    }
+  }
+
+  return res.json({ received: true });
+}
+
 module.exports = {
   getStripeConfig,
   createCheckoutSession,
   verifyCheckoutSession,
   processDirectCardPayment,
+  handleStripeWebhook,
 };

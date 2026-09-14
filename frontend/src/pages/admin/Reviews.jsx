@@ -6,7 +6,9 @@ import {
   CheckCircle2, 
   XCircle, 
   Loader2, 
-  Sparkles 
+  Sparkles,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { getAdminReviews, toggleReviewStatus, featureReviewAsTestimonial } from '../../services/adminApi';
 import { deleteReview } from '../../services/reviewApi';
@@ -15,7 +17,7 @@ import ConfirmModal from '../../components/ConfirmModal';
 export default function Reviews() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState('all');
-  const [page] = useState(1);
+  const [page, setPage] = useState(1);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [dialogConfig, setDialogConfig] = useState(null);
 
@@ -25,6 +27,8 @@ export default function Reviews() {
   });
 
   const reviews = data?.reviews || [];
+  const totalPages = data?.pagination?.totalPages || 1;
+  const totalReviews = data?.pagination?.total || 0;
 
   const toggleMutation = useMutation({
     mutationFn: toggleReviewStatus,
@@ -100,7 +104,7 @@ export default function Reviews() {
         <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl text-xs font-bold">
           <button
             type="button"
-            onClick={() => setStatusFilter('all')}
+            onClick={() => { setStatusFilter('all'); setPage(1); }}
             className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
               statusFilter === 'all' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-900'
             }`}
@@ -109,7 +113,7 @@ export default function Reviews() {
           </button>
           <button
             type="button"
-            onClick={() => setStatusFilter('approved')}
+            onClick={() => { setStatusFilter('approved'); setPage(1); }}
             className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
               statusFilter === 'approved' ? 'bg-white text-[#6a9739] shadow-xs' : 'text-gray-500 hover:text-gray-900'
             }`}
@@ -118,12 +122,12 @@ export default function Reviews() {
           </button>
           <button
             type="button"
-            onClick={() => setStatusFilter('pending')}
+            onClick={() => { setStatusFilter('pending'); setPage(1); }}
             className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
               statusFilter === 'pending' ? 'bg-white text-amber-600 shadow-xs' : 'text-gray-500 hover:text-gray-900'
             }`}
           >
-            Hidden
+            Pending
           </button>
         </div>
       </div>
@@ -275,6 +279,36 @@ export default function Reviews() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 bg-gray-50/50 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+            <span>
+              Showing Page <span className="font-bold text-gray-800">{page}</span> of{' '}
+              <span className="font-bold text-gray-800">{totalPages}</span> ({totalReviews} total reviews)
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors cursor-pointer"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Previous</span>
+              </button>
+              <button
+                type="button"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors cursor-pointer"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -183,7 +183,12 @@ export default function Orders() {
           .map((row) =>
             row
               .map((val) => {
-                const str = String(val ?? '').replace(/"/g, '""');
+                let str = String(val ?? '');
+                // Neutralize spreadsheet formula injection (=, +, -, @, \t, \r)
+                if (/^[=+\-@\t\r]/.test(str)) {
+                  str = `'${str}`;
+                }
+                str = str.replace(/"/g, '""');
                 return `"${str}"`;
               })
               .join(',')

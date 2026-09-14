@@ -4,12 +4,16 @@ const {
   createCheckoutSession,
   verifyCheckoutSession,
   processDirectCardPayment,
+  handleStripeWebhook,
 } = require('../controllers/paymentController');
 const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
-// Get publishable key
 
+// Stripe Webhook endpoint
+router.post('/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook);
+
+// Get publishable key
 router.get('/config', getStripeConfig);
 
 // Protected payment endpoints

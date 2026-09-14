@@ -50,16 +50,18 @@ export const DEFAULT_CATEGORIES = [
 /**
  * Category API Service (Rule 19: Named resource + action)
  */
-export async function getCategories() {
+export async function getCategories({ includeFallback = false } = {}) {
   try {
     const response = await api.get('/categories');
     if (response?.categories && response.categories.length > 0) {
       return response.categories;
     }
-    return DEFAULT_CATEGORIES;
-  } catch {
-    // Graceful fallback to default categories if backend is unavailable or starting up
-    return DEFAULT_CATEGORIES;
+    return includeFallback ? DEFAULT_CATEGORIES : [];
+  } catch (err) {
+    if (includeFallback) {
+      return DEFAULT_CATEGORIES;
+    }
+    throw err;
   }
 }
 

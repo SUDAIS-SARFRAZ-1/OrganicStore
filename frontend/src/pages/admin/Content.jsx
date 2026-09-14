@@ -48,6 +48,7 @@ export default function Content() {
   });
 
   const [testimonials, setTestimonials] = useState([]);
+  const [sectionsState, setSectionsState] = useState([]);
 
   // Sync state when queries resolve
   useEffect(() => {
@@ -55,6 +56,12 @@ export default function Content() {
       setTestimonials([...testimonialsData].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)));
     }
   }, [testimonialsData]);
+
+  useEffect(() => {
+    if (sections && sections.length > 0) {
+      setSectionsState(sections.map((s) => ({ ...s })));
+    }
+  }, [sections]);
 
   // Section update mutation
   const sectionMutation = useMutation({
@@ -81,6 +88,20 @@ export default function Content() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['homeBrands'] });
       showFeedback('Partner brand logos updated!');
+    },
+  });
+
+  // Testimonial delete mutation
+  const deleteTestimonialMutation = useMutation({
+    mutationFn: deleteAdminTestimonial,
+    onSuccess: (_, deletedId) => {
+      queryClient.invalidateQueries({ queryKey: ['homeTestimonials'] });
+      queryClient.invalidateQueries({ queryKey: ['testimonials'] });
+      setTestimonials((prev) => prev.filter((t) => t.id !== deletedId));
+      showFeedback('Testimonial deleted successfully!');
+    },
+    onError: (err) => {
+      showFeedback(err.message || 'Failed to delete testimonial.');
     },
   });
 
@@ -121,10 +142,10 @@ export default function Content() {
 
   const handleDeleteTestimonial = (id, index) => {
     if (id && !id.startsWith('new-')) {
-      deleteAdminTestimonial(id).catch(console.error);
+      deleteTestimonialMutation.mutate(id);
+    } else {
+      setTestimonials((prev) => prev.filter((_, idx) => idx !== index));
     }
-    const updated = testimonials.filter((_, idx) => idx !== index);
-    setTestimonials(updated);
   };
 
   const handleTestimonialChange = (index, field, value) => {
@@ -135,6 +156,12 @@ export default function Content() {
 
   const handleSaveTestimonials = () => {
     testimonialsMutation.mutate(testimonials);
+  };
+
+  const handleSectionFieldChange = (id, field, value) => {
+    setSectionsState((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, [field]: value } : s))
+    );
   };
 
   const handleSectionSave = (sec) => {
@@ -216,17 +243,15 @@ export default function Content() {
               <Loader2 className="w-8 h-8 text-[#6a9739] animate-spin mb-3" />
               <p className="text-xs text-gray-400">Loading sections...</p>
             </div>
-          ) : sections.length === 0 ? (
-            <div className="bg-white rounded-2xl p-12 text-center text-xs text-gray-400">
-              No editable marketing sections configured yet.
-            </div>
+          ) : sectionsState.length === 0 ? (
+            <p className="text-xs text-gray-500 py-8 text-center">No customizable banner sections currently found.</p>
           ) : (
-            sections.map((sec) => (
+            sectionsState.map((sec) => (
               <div
                 key={sec.id}
-                className="bg-white rounded-2xl p-6 shadow-xs border border-gray-100 space-y-4"
+                className="p-5 rounded-2xl bg-white border border-gray-100 shadow-xs space-y-4"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between border-b border-gray-50 pb-3">
                   <div className="flex items-center gap-2">
                     <span className="px-2.5 py-1 bg-green-50 text-[#6a9739] text-[10px] font-bold rounded-lg uppercase">
                       {sec.type}
@@ -250,8 +275,8 @@ export default function Content() {
                     <label className="block font-bold text-gray-700 mb-1">Headline / Title</label>
                     <input
                       type="text"
-                      defaultValue={sec.title}
-                      onChange={(e) => { sec.title = e.target.value; }}
+                      value={sec.title || ''}
+                      onChange={(e) => handleSectionFieldChange(sec.id, 'title', e.target.value)}
                       className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:border-[#6a9739]"
                     />
                   </div>
@@ -260,8 +285,8 @@ export default function Content() {
                     <label className="block font-bold text-gray-700 mb-1">Subtitle / Subtext</label>
                     <input
                       type="text"
-                      defaultValue={sec.subtitle || ''}
-                      onChange={(e) => { sec.subtitle = e.target.value; }}
+                      value={sec.subtitle || ''}
+                      onChange={(e) => handleSectionFieldChange(sec.id, 'subtitle', e.target.value)}
                       className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:border-[#6a9739]"
                     />
                   </div>
@@ -270,8 +295,8 @@ export default function Content() {
                     <label className="block font-bold text-gray-700 mb-1">Call-To-Action Link URL</label>
                     <input
                       type="text"
-                      defaultValue={sec.linkUrl || ''}
-                      onChange={(e) => { sec.linkUrl = e.target.value; }}
+                      value={sec.linkUrl || ''}
+                      onChange={(e) => handleSectionFieldChange(sec.id, 'linkUrl', e.target.value)}
                       placeholder="/shop or /category/groceries"
                       className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:border-[#6a9739]"
                     />
@@ -281,8 +306,8 @@ export default function Content() {
                     <label className="block font-bold text-gray-700 mb-1">Banner Background Image URL</label>
                     <input
                       type="url"
-                      defaultValue={sec.bannerImage || ''}
-                      onChange={(e) => { sec.bannerImage = e.target.value; }}
+                      value={sec.bannerImage || ''}
+                      onChange={(e) => handleSectionFieldChange(sec.id, 'bannerImage', e.target.value)}
                       placeholder="https://images.unsplash.com/..."
                       className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:border-[#6a9739]"
                     />

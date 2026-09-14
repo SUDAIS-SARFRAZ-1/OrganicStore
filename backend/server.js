@@ -63,6 +63,9 @@ app.use(
   })
 );
 
+// Webhook raw body parser for Stripe signature verification
+app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
+
 // Body and Cookie Parsers with Payload Size Limits (Item 14 & Signed Cookies Item 10)
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: true, limit: '100kb' }));

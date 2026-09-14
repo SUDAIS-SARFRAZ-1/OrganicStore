@@ -23,6 +23,8 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import About from './pages/About';
 import Contact from './pages/Contact';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import Terms from './pages/Terms';
 
 // Customer Account Portal (code-split)
 const Profile = lazy(() => import('./pages/account/Profile'));
@@ -146,6 +148,8 @@ export default function App() {
             {/* Dedicated Informational Pages */}
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<Terms />} />
           </Routes>
         </Suspense>
       </main>

@@ -1,7 +1,7 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Truck, Percent, RefreshCw, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowRight, Truck, Percent, RefreshCw, Clock, ChevronLeft, ChevronRight, AlertCircle, X } from 'lucide-react';
 import { getCategories } from '../services/categoryApi';
 import { getProducts } from '../services/productApi';
 import { getTestimonials, getBrandLogos, getHomeSections } from '../services/contentApi';
@@ -13,6 +13,7 @@ import TestimonialCard from '../components/TestimonialCard';
 export default function Home() {
   const queryClient = useQueryClient();
   const { openDrawer } = useCartDrawerStore();
+  const [cartError, setCartError] = useState(null);
 
   const bestSellingRef = useRef(null);
   const categoriesRef = useRef(null);
@@ -33,9 +34,17 @@ export default function Home() {
   const addMutation = useMutation({
     mutationFn: addToCart,
     onSuccess: (updatedCart) => {
+      setCartError(null);
       queryClient.setQueryData(['cart'], updatedCart);
       queryClient.invalidateQueries({ queryKey: ['cart'] });
       openDrawer();
+    },
+    onError: (err) => {
+      const msg = err.message || err.response?.data?.message || 'Failed to add item to cart.';
+      setCartError(msg);
+      setTimeout(() => {
+        setCartError((prev) => (prev === msg ? null : prev));
+      }, 5000);
     },
   });
 
@@ -46,7 +55,7 @@ export default function Home() {
   // Dynamic categories
   const { data: categories = [] } = useQuery({
     queryKey: ['categories'],
-    queryFn: getCategories,
+    queryFn: () => getCategories({ includeFallback: true }),
   });
 
   // Best Selling Products (Featured)
@@ -492,6 +501,23 @@ export default function Home() {
             </div>
           </div>
         </section>
+      )}
+
+      {/* Floating Cart Error Toast */}
+      {cartError && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-md bg-red-600 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center justify-between gap-3 text-xs font-bold animate-in fade-in slide-in-from-bottom-5 duration-200">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{cartError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCartError(null)}
+            className="p-1 hover:bg-red-700 rounded-lg transition-colors cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       )}
     </div>
   );
