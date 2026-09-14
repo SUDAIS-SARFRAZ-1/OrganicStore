@@ -6,7 +6,8 @@ export default function CouponList({ appliedCode, onApplyCoupon, cartTotal = 0 }
   const { data: coupons = [], isLoading } = useQuery({
     queryKey: ['publicCoupons'],
     queryFn: getPublicCoupons,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
+    refetchOnMount: 'always',
   });
 
   if (isLoading || coupons.length === 0) return null;
@@ -34,11 +35,11 @@ export default function CouponList({ appliedCode, onApplyCoupon, cartTotal = 0 }
           return (
             <div
               key={coupon.id}
-              className={`p-3 rounded-lg border transition-all flex items-center justify-between gap-3 ${
+              className={`p-3 rounded-lg border transition-all duration-200 flex items-center justify-between gap-3 ${
                 isApplied
-                  ? 'bg-green-50 border-green-300'
+                  ? 'bg-green-50/90 border-green-300 shadow-xs'
                   : meetsMin
-                  ? 'bg-white border-dashed border-[#6a9739]/40 hover:border-[#6a9739]'
+                  ? 'bg-white border-dashed border-[#6a9739]/40 hover:border-[#6a9739] hover:shadow-xs'
                   : 'bg-white/60 border-dashed border-gray-200 opacity-75'
               }`}
             >
@@ -65,7 +66,7 @@ export default function CouponList({ appliedCode, onApplyCoupon, cartTotal = 0 }
 
               <div className="shrink-0">
                 {isApplied ? (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-600 text-white text-xs font-bold rounded-md shadow-2xs">
+                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-600 text-white text-xs font-bold rounded-md shadow-2xs animate-check-pulse">
                     <Check className="w-3.5 h-3.5" /> Applied
                   </span>
                 ) : (
@@ -73,9 +74,9 @@ export default function CouponList({ appliedCode, onApplyCoupon, cartTotal = 0 }
                     type="button"
                     onClick={() => onApplyCoupon(coupon.code)}
                     disabled={!meetsMin}
-                    className={`px-3 py-1 text-xs font-bold rounded-md transition-colors cursor-pointer ${
+                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer btn-tactile ${
                       meetsMin
-                        ? 'bg-[#6a9739] hover:bg-[#58802d] text-white shadow-2xs'
+                        ? 'bg-[#6a9739] hover:bg-[#58802d] text-white shadow-2xs hover:shadow-xs active:scale-95'
                         : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     }`}
                   >

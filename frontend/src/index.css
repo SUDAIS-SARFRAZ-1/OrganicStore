@@ -1,1 +1,84 @@
 @import "tailwindcss";
+
+/* ==========================================================================
+   High-Performance GPU Micro-Animations (Rule 15: 0 Layout Reflow, 60fps)
+   Strictly uses transform and opacity for compositor-only execution.
+   ========================================================================== */
+
+@keyframes badge-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.7;
+  }
+  60% {
+    transform: scale(1.35);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes heart-pop {
+  0% {
+    transform: scale(0.8);
+  }
+  50% {
+    transform: scale(1.45);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes check-pulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-slide-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-badge-pop {
+  animation: badge-pop 320ms cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.animate-heart-pop {
+  animation: heart-pop 300ms cubic-bezier(0.175, 0.885, 0.32, 1.35) forwards;
+}
+
+.animate-check-pulse {
+  animation: check-pulse 280ms cubic-bezier(0.175, 0.885, 0.32, 1.2) forwards;
+}
+
+.animate-fade-slide-in {
+  animation: fade-slide-in 200ms ease-out forwards;
+}
+
+/* Tactile feedback for buttons */
+.btn-tactile {
+  transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1), background-color 150ms ease, box-shadow 150ms ease;
+  will-change: transform;
+}
+.btn-tactile:active {
+  transform: scale(0.96);
+}

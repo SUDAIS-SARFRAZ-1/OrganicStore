@@ -68,9 +68,9 @@ export default function ReviewSection({ productId, productName }) {
       setTitle('');
       setComment('');
       setFormError('');
-      queryClient.invalidateQueries(['productReviews', productId]);
-      queryClient.invalidateQueries(['reviewEligibility', productId, user?.id]);
-      queryClient.invalidateQueries(['product', productId]);
+      queryClient.invalidateQueries({ queryKey: ['productReviews', productId] });
+      queryClient.invalidateQueries({ queryKey: ['reviewEligibility', productId, user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['product', productId] });
     },
     onError: (err) => {
       setFormError(err.response?.data?.message || 'Failed to submit review. Please try again.');
@@ -81,9 +81,9 @@ export default function ReviewSection({ productId, productName }) {
   const deleteMutation = useMutation({
     mutationFn: deleteReview,
     onSuccess: () => {
-      queryClient.invalidateQueries(['productReviews', productId]);
-      queryClient.invalidateQueries(['reviewEligibility', productId, user?.id]);
-      queryClient.invalidateQueries(['product', productId]);
+      queryClient.invalidateQueries({ queryKey: ['productReviews', productId] });
+      queryClient.invalidateQueries({ queryKey: ['reviewEligibility', productId, user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['product', productId] });
     },
   });
 

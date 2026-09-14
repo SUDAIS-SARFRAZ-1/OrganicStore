@@ -17,15 +17,62 @@ export default function MiniCartDrawer() {
 
   const updateMutation = useMutation({
     mutationFn: updateCartItem,
+    onMutate: async ({ itemId, quantity }) => {
+      await queryClient.cancelQueries({ queryKey: ['cart'] });
+      const previousCart = queryClient.getQueryData(['cart']);
+      if (previousCart?.items) {
+        const updatedItems = previousCart.items.map((i) =>
+          i.id === itemId ? { ...i, quantity } : i
+        );
+        const subtotal = updatedItems.reduce((sum, i) => sum + i.quantity * Number(i.unitPrice), 0);
+        const totalItems = updatedItems.reduce((sum, i) => sum + i.quantity, 0);
+        queryClient.setQueryData(['cart'], {
+          ...previousCart,
+          items: updatedItems,
+          subtotal,
+          totalItems,
+        });
+      }
+      return { previousCart };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousCart) {
+        queryClient.setQueryData(['cart'], context.previousCart);
+      }
+    },
     onSuccess: (updatedCart) => {
       queryClient.setQueryData(['cart'], updatedCart);
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
     },
   });
 
   const removeMutation = useMutation({
     mutationFn: removeCartItem,
+    onMutate: async (arg) => {
+      const itemId = typeof arg === 'object' && arg !== null ? arg.itemId : arg;
+      await queryClient.cancelQueries({ queryKey: ['cart'] });
+      const previousCart = queryClient.getQueryData(['cart']);
+      if (previousCart?.items) {
+        const updatedItems = previousCart.items.filter((i) => i.id !== itemId);
+        const subtotal = updatedItems.reduce((sum, i) => sum + i.quantity * Number(i.unitPrice), 0);
+        const totalItems = updatedItems.reduce((sum, i) => sum + i.quantity, 0);
+        queryClient.setQueryData(['cart'], {
+          ...previousCart,
+          items: updatedItems,
+          subtotal,
+          totalItems,
+        });
+      }
+      return { previousCart };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousCart) {
+        queryClient.setQueryData(['cart'], context.previousCart);
+      }
+    },
     onSuccess: (updatedCart) => {
       queryClient.setQueryData(['cart'], updatedCart);
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
     },
   });
 
@@ -109,18 +156,18 @@ export default function MiniCartDrawer() {
             /* Line Items List */
             <div className="flex-1 overflow-y-auto p-5 space-y-4 divide-y divide-gray-100">
               {items.map((item) => (
-                <div key={item.id} className="pt-4 first:pt-0 flex gap-3.5 items-start">
+                <div key={item.id} className="pt-4 first:pt-0 flex gap-3.5 items-start transition-all duration-200 ease-out animate-fade-slide-in">
                   {/* Item Image */}
                   <Link
                     to={`/product/${item.slug}`}
                     onClick={closeDrawer}
-                    className="w-16 h-16 rounded-lg bg-gray-50 border border-gray-100 shrink-0 overflow-hidden"
+                    className="w-16 h-16 rounded-lg bg-gray-50 border border-gray-100 shrink-0 overflow-hidden group/img"
                   >
                     {item.image ? (
                       <img
                         src={item.image}
                         alt={item.name}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-200 ease-out"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[#6a9739]">
@@ -141,13 +188,13 @@ export default function MiniCartDrawer() {
 
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-xs font-semibold text-gray-500">
-                        ₨ {item.unitPrice.toFixed(2)} each
+                        ₨ {Number(item.unitPrice).toFixed(2)} each
                       </span>
                     </div>
 
                     {/* Quantity Selector & Remove Action */}
                     <div className="flex items-center justify-between mt-2.5">
-                      <div className="inline-flex items-center border border-gray-200 rounded-md bg-gray-50/50">
+                      <div className="inline-flex items-center border border-gray-200 rounded-md bg-gray-50/50 shadow-2xs">
                         <button
                           type="button"
                           onClick={() => {
@@ -161,13 +208,13 @@ export default function MiniCartDrawer() {
                             }
                           }}
                           disabled={updateMutation.isPending || removeMutation.isPending}
-                          className="p-1 text-gray-500 hover:text-gray-900 cursor-pointer disabled:opacity-40"
+                          className="p-1 text-gray-500 hover:text-gray-900 cursor-pointer disabled:opacity-40 btn-tactile active:scale-75"
                           aria-label="Decrease quantity"
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
 
-                        <span className="px-2.5 text-xs font-bold text-gray-800">
+                        <span className="px-2.5 text-xs font-bold text-gray-800 tabular-nums">
                           {item.quantity}
                         </span>
 
@@ -184,7 +231,7 @@ export default function MiniCartDrawer() {
                             updateMutation.isPending ||
                             removeMutation.isPending
                           }
-                          className="p-1 text-gray-500 hover:text-gray-900 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="p-1 text-gray-500 hover:text-gray-900 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed btn-tactile active:scale-75"
                           aria-label="Increase quantity"
                         >
                           <Plus className="w-3.5 h-3.5" />
@@ -192,17 +239,17 @@ export default function MiniCartDrawer() {
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <span className="text-xs font-extrabold text-gray-900">
-                          ₨ {item.subtotal.toFixed(2)}
+                        <span className="text-xs font-extrabold text-gray-900 tabular-nums">
+                          ₨ {(item.subtotal ? Number(item.subtotal) : Number(item.unitPrice) * item.quantity).toFixed(2)}
                         </span>
                         <button
                           type="button"
                           onClick={() => removeMutation.mutate(item.id)}
                           disabled={removeMutation.isPending}
-                          className="text-gray-400 hover:text-red-600 transition-colors p-1 cursor-pointer"
-                          aria-label={`Remove ${item.name}`}
+                          aria-label={`Remove ${item.name} from cart`}
+                          className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all cursor-pointer btn-tactile active:scale-90"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>

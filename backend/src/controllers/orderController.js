@@ -243,30 +243,50 @@ async function createOrder(req, res, next) {
         },
       });
 
-      // 7. Atomic decrement product inventory (Item 11: prevents negative stock under concurrent checkouts)
-      for (const item of cart.items) {
-        const updateResult = await tx.product.updateMany({
-          where: {
-            id: item.productId,
-            isActive: true,
-            stock: { gte: item.quantity },
-          },
-          data: {
-            stock: { decrement: item.quantity },
-          },
-        });
+      // 7. Inventory stock management
+      // For COD: decrement stock immediately as order is confirmed upon placement.
+      // For STRIPE: validate stock availability only; decrement occurs ONLY when payment is successfully confirmed.
+      if (resolvedMethod === 'COD') {
+        for (const item of cart.items) {
+          const updateResult = await tx.product.updateMany({
+            where: {
+              id: item.productId,
+              isActive: true,
+              stock: { gte: item.quantity },
+            },
+            data: {
+              stock: { decrement: item.quantity },
+            },
+          });
 
-        if (updateResult.count === 0) {
-          throw new Error(
-            `Insufficient stock for "${item.product.name}". The item sold out while processing your checkout.`
-          );
+          if (updateResult.count === 0) {
+            throw new Error(
+              `Insufficient stock for "${item.product.name}". The item sold out while processing your checkout.`
+            );
+          }
+        }
+      } else {
+        // STRIPE validation: verify sufficient stock exists without decrementing
+        for (const item of cart.items) {
+          const currentProd = await tx.product.findUnique({
+            where: { id: item.productId },
+            select: { name: true, stock: true, isActive: true },
+          });
+
+          if (!currentProd || !currentProd.isActive || currentProd.stock < item.quantity) {
+            throw new Error(
+              `Insufficient stock for "${item.product.name}". Only ${currentProd?.stock || 0} unit(s) available.`
+            );
+          }
         }
       }
 
-      // 8. Empty the user's cart
-      await tx.cartItem.deleteMany({
-        where: { cartId: cart.id },
-      });
+      // 8. Empty the user's cart (COD only; for STRIPE, cart is preserved until payment is verified)
+      if (resolvedMethod === 'COD') {
+        await tx.cartItem.deleteMany({
+          where: { cartId: cart.id },
+        });
+      }
 
       return order;
     });
@@ -871,12 +891,17 @@ async function cancelOrder(req, res, next) {
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      // 1. Restore product inventory stock
-      for (const item of existing.items) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stock: { increment: item.quantity } },
-        });
+      // 1. Restore product inventory stock only if stock was decremented (COD or PAID order)
+      const stockWasDecremented = existing.paymentMethod === 'COD' || existing.paymentStatus === 'PAID';
+      if (stockWasDecremented) {
+        for (const item of existing.items) {
+          if (item.productId) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { stock: { increment: item.quantity } },
+            });
+          }
+        }
       }
 
       // 2. Mark payment failed/cancelled

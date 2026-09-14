@@ -44,7 +44,7 @@ export default function Categories() {
   const createMutation = useMutation({
     mutationFn: createCategory,
     onSuccess: () => {
-      queryClient.invalidateQueries(['categories']);
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
       closeModal();
     },
     onError: (err) => {
@@ -55,7 +55,7 @@ export default function Categories() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => updateCategory(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['categories']);
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
       closeModal();
     },
     onError: (err) => {
@@ -66,7 +66,7 @@ export default function Categories() {
   const deleteMutation = useMutation({
     mutationFn: deleteCategory,
     onSuccess: () => {
-      queryClient.invalidateQueries(['categories']);
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
       setDeleteConfirmId(null);
     },
     onError: (err) => {

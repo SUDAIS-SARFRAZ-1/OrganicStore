@@ -65,9 +65,9 @@ export default function Products() {
   const createMutation = useMutation({
     mutationFn: createProduct,
     onSuccess: () => {
-      queryClient.invalidateQueries(['adminProducts']);
-      queryClient.invalidateQueries(['products']);
-      queryClient.invalidateQueries(['adminDashboardStats']);
+      queryClient.invalidateQueries({ queryKey: ['adminProducts'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['adminDashboardStats'] });
       closeModal();
     },
     onError: (err) => {
@@ -78,9 +78,9 @@ export default function Products() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => updateProduct(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['adminProducts']);
-      queryClient.invalidateQueries(['products']);
-      queryClient.invalidateQueries(['adminDashboardStats']);
+      queryClient.invalidateQueries({ queryKey: ['adminProducts'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['adminDashboardStats'] });
       closeModal();
     },
     onError: (err) => {
@@ -91,10 +91,10 @@ export default function Products() {
   const deleteMutation = useMutation({
     mutationFn: deleteProduct,
     onSuccess: () => {
-      queryClient.invalidateQueries(['adminProducts']);
-      queryClient.invalidateQueries(['products']);
-      queryClient.invalidateQueries(['adminDashboardStats']);
-      queryClient.invalidateQueries(['cart']);
+      queryClient.invalidateQueries({ queryKey: ['adminProducts'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['adminDashboardStats'] });
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
       setDeleteConfirmId(null);
     },
   });

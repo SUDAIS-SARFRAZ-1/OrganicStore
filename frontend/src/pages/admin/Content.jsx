@@ -60,7 +60,7 @@ export default function Content() {
   const sectionMutation = useMutation({
     mutationFn: ({ id, data }) => updateHomeSection({ id, data }),
     onSuccess: () => {
-      queryClient.invalidateQueries(['homeSections']);
+      queryClient.invalidateQueries({ queryKey: ['homeSections'] });
       showFeedback('Homepage marketing banner updated successfully!');
     },
   });
@@ -69,8 +69,8 @@ export default function Content() {
   const testimonialsMutation = useMutation({
     mutationFn: updateHomeTestimonials,
     onSuccess: () => {
-      queryClient.invalidateQueries(['homeTestimonials']);
-      queryClient.invalidateQueries(['testimonials']);
+      queryClient.invalidateQueries({ queryKey: ['homeTestimonials'] });
+      queryClient.invalidateQueries({ queryKey: ['testimonials'] });
       showFeedback('Homepage testimonials and display preference saved!');
     },
   });
@@ -79,7 +79,7 @@ export default function Content() {
   const brandsMutation = useMutation({
     mutationFn: updateHomeBrands,
     onSuccess: () => {
-      queryClient.invalidateQueries(['homeBrands']);
+      queryClient.invalidateQueries({ queryKey: ['homeBrands'] });
       showFeedback('Partner brand logos updated!');
     },
   });

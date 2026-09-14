@@ -74,7 +74,7 @@ async function createCheckoutSession(req, res, next) {
 
     // Construct line items for Stripe
     let lineItems = [];
-    if (Number(order.discount) > 0) {
+    if (Number(order.discountAmount || order.discount || 0) > 0) {
       // With coupon discount, present line item matching exact final totalAmount
       lineItems = [
         {
@@ -178,7 +178,7 @@ async function verifyCheckoutSession(req, res, next) {
     // Find order
     const order = await prisma.order.findFirst({
       where: orderId ? { id: orderId } : { payment: { transactionId: sessionId } },
-      include: { payment: true, user: true },
+      include: { payment: true, user: true, items: true },
     });
 
     if (!order) {
@@ -260,10 +260,28 @@ async function verifyCheckoutSession(req, res, next) {
         },
       });
 
-      // 3. Clear user cart if any active cart exists
-      const userCart = await tx.cart.findUnique({ where: { userId } });
-      if (userCart) {
-        await tx.cartItem.deleteMany({ where: { cartId: userCart.id } });
+      // 3. Decrement inventory stock on verified successful payment confirmation
+      for (const item of (order.items || [])) {
+        if (item.productId) {
+          await tx.product.updateMany({
+            where: {
+              id: item.productId,
+              stock: { gte: item.quantity },
+            },
+            data: {
+              stock: { decrement: item.quantity },
+            },
+          });
+        }
+      }
+
+      // 4. Clear user cart if any active cart exists
+      const targetUserId = order.userId || userId;
+      if (targetUserId) {
+        const userCart = await tx.cart.findUnique({ where: { userId: targetUserId } });
+        if (userCart) {
+          await tx.cartItem.deleteMany({ where: { cartId: userCart.id } });
+        }
       }
 
       return ord;
@@ -388,7 +406,22 @@ async function processDirectCardPayment(req, res, next) {
         },
       });
 
-      // 3. Clear user cart
+      // 3. Decrement inventory stock on verified successful payment
+      for (const item of (order.items || [])) {
+        if (item.productId) {
+          await tx.product.updateMany({
+            where: {
+              id: item.productId,
+              stock: { gte: item.quantity },
+            },
+            data: {
+              stock: { decrement: item.quantity },
+            },
+          });
+        }
+      }
+
+      // 4. Clear user cart
       const userCart = await tx.cart.findUnique({ where: { userId } });
       if (userCart) {
         await tx.cartItem.deleteMany({ where: { cartId: userCart.id } });

@@ -93,12 +93,16 @@ async function register(req, res, next) {
     const { name, email, password, phone } = req.body;
 
     // 1. Server-side validation
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return res.status(400).json({ success: false, message: 'Valid name is required.' });
+    if (!name || typeof name !== 'string' || name.trim().length === 0 || name.trim().length > 60) {
+      return res.status(400).json({ success: false, message: 'Name must be between 1 and 60 characters.' });
     }
 
-    if (!email || typeof email !== 'string') {
-      return res.status(400).json({ success: false, message: 'Email address is required.' });
+    if (!email || typeof email !== 'string' || email.trim().length > 100) {
+      return res.status(400).json({ success: false, message: 'Valid email address under 100 characters is required.' });
+    }
+
+    if (phone && (typeof phone !== 'string' || phone.trim().length > 20)) {
+      return res.status(400).json({ success: false, message: 'Phone number cannot exceed 20 characters.' });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -121,11 +125,11 @@ async function register(req, res, next) {
       });
     }
 
-    // Password length >= 8 characters (Lower product gaps)
-    if (!password || typeof password !== 'string' || password.length < 8) {
+    // Password length >= 8 characters and <= 128 characters
+    if (!password || typeof password !== 'string' || password.length < 8 || password.length > 128) {
       return res.status(400).json({
         success: false,
-        message: 'Password must be at least 8 characters long.',
+        message: 'Password must be between 8 and 128 characters long.',
       });
     }
 
@@ -464,6 +468,18 @@ async function login(req, res, next) {
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
+
+    if (normalizedEmail.length > 100) {
+      return res.status(400).json({ success: false, message: 'Email address cannot exceed 100 characters.' });
+    }
+
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid email format.' });
+    }
+
+    if (typeof password !== 'string' || password.length > 128) {
+      return res.status(400).json({ success: false, message: 'Password cannot exceed 128 characters.' });
+    }
 
     // Fetch user
     const user = await prisma.user.findUnique({

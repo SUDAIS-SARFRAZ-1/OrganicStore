@@ -13,12 +13,14 @@ const { prisma } = require('../config/db');
 async function getPublicCoupons(req, res, next) {
   try {
     const now = new Date();
+    // Allow up to 2 minutes clock skew tolerance for startsAt
+    const skewWindow = new Date(Date.now() + 120000);
 
     const coupons = await prisma.coupon.findMany({
       where: {
         isActive: true,
         isPublic: true,
-        startsAt: { lte: now },
+        startsAt: { lte: skewWindow },
         expiresAt: { gte: now },
       },
       select: {
@@ -30,11 +32,18 @@ async function getPublicCoupons(req, res, next) {
         minOrderAmount: true,
         maxDiscountAmount: true,
         expiresAt: true,
+        usageLimit: true,
+        timesUsed: true,
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    const formatted = coupons.map((c) => ({
+    // Only surface coupons that haven't hit their usage ceiling
+    const available = coupons.filter(
+      (c) => c.usageLimit === null || c.timesUsed < c.usageLimit
+    );
+
+    const formatted = available.map((c) => ({
       id: c.id,
       code: c.code,
       description: c.description,
@@ -184,17 +193,42 @@ async function validateCoupon(req, res, next) {
 async function getAllCoupons(req, res, next) {
   try {
     const coupons = await prisma.coupon.findMany({
+      include: {
+        _count: {
+          select: { orders: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
 
-    return res.status(200).json({
-      success: true,
-      coupons: coupons.map((c) => ({
+    const now = new Date();
+    const formatted = coupons.map((c) => {
+      const realUsed = Math.max(c.timesUsed || 0, c._count?.orders || 0);
+      const isExpired = c.expiresAt ? new Date(c.expiresAt) < now : false;
+      return {
         ...c,
+        timesUsed: realUsed,
+        usedCount: realUsed,
+        orderCount: c._count?.orders || 0,
+        isExpired,
         discountValue: Number(c.discountValue),
         minOrderAmount: Number(c.minOrderAmount),
         maxDiscountAmount: c.maxDiscountAmount ? Number(c.maxDiscountAmount) : null,
-      })),
+      };
+    });
+
+    const totalCoupons = formatted.length;
+    const activeCount = formatted.filter((c) => c.isActive && !c.isExpired).length;
+    const totalRedemptions = formatted.reduce((sum, c) => sum + (c.timesUsed || 0), 0);
+
+    return res.status(200).json({
+      success: true,
+      coupons: formatted,
+      stats: {
+        totalCoupons,
+        activeCount,
+        totalRedemptions,
+      },
     });
   } catch (error) {
     next(error);
@@ -227,6 +261,12 @@ async function createCoupon(req, res, next) {
       });
     }
 
+    // Default time to end of selected day (23:59:59.999Z) if no specific time was passed
+    let resolvedExpiresAt = new Date(expiresAt);
+    if (typeof expiresAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(expiresAt.trim())) {
+      resolvedExpiresAt = new Date(`${expiresAt.trim()}T23:59:59.999Z`);
+    }
+
     const created = await prisma.coupon.create({
       data: {
         code: code.trim().toUpperCase(),
@@ -238,7 +278,7 @@ async function createCoupon(req, res, next) {
         isPublic: isPublic !== undefined ? Boolean(isPublic) : true,
         isActive: isActive !== undefined ? Boolean(isActive) : true,
         startsAt: startsAt ? new Date(startsAt) : new Date(),
-        expiresAt: new Date(expiresAt),
+        expiresAt: resolvedExpiresAt,
         usageLimit: usageLimit ? parseInt(usageLimit, 10) : null,
       },
     });

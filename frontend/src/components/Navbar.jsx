@@ -196,12 +196,15 @@ export default function Navbar() {
               <button
                 onClick={openDrawer}
                 aria-label="Open Cart"
-                className="flex items-center gap-2.5 text-gray-700 hover:text-[#6a9739] transition-colors group cursor-pointer"
+                className="flex items-center gap-2.5 text-gray-700 hover:text-[#6a9739] transition-colors group cursor-pointer btn-tactile"
               >
                 <div className="relative">
-                  <ShoppingBag className="w-6 h-6" />
+                  <ShoppingBag className="w-6 h-6 group-hover:scale-110 transition-transform duration-200" />
                   {cart?.totalItems > 0 && (
-                    <span className="absolute -top-1.5 -right-2 bg-[#6a9739] text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-xs">
+                    <span
+                      key={cart.totalItems}
+                      className="absolute -top-1.5 -right-2 bg-[#6a9739] text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-xs animate-badge-pop"
+                    >
                       {cart.totalItems}
                     </span>
                   )}

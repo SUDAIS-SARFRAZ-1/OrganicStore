@@ -32,7 +32,7 @@ export default function Wishlist() {
   const removeMutation = useMutation({
     mutationFn: removeFromWishlist,
     onSuccess: () => {
-      queryClient.invalidateQueries(['userWishlist']);
+      queryClient.invalidateQueries({ queryKey: ['userWishlist'] });
     },
   });
 
@@ -40,7 +40,7 @@ export default function Wishlist() {
   const cartMutation = useMutation({
     mutationFn: (productId) => addToCart({ productId, quantity: 1 }),
     onSuccess: () => {
-      queryClient.invalidateQueries(['cart']);
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
       openDrawer();
     },
   });

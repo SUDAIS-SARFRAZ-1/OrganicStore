@@ -88,7 +88,7 @@ export async function deleteCategory(id) {
 // 6. Coupons Management
 export async function getAdminCoupons() {
   const response = await api.get('/coupons');
-  return response.coupons || [];
+  return response;
 }
 
 export async function createCoupon(couponData) {

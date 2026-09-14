@@ -56,7 +56,7 @@ export default function Addresses() {
   const createMutation = useMutation({
     mutationFn: createAddress,
     onSuccess: () => {
-      queryClient.invalidateQueries(['userAddresses']);
+      queryClient.invalidateQueries({ queryKey: ['userAddresses'] });
       closeModal();
     },
     onError: (err) => {
@@ -67,7 +67,7 @@ export default function Addresses() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => updateAddress(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['userAddresses']);
+      queryClient.invalidateQueries({ queryKey: ['userAddresses'] });
       closeModal();
     },
     onError: (err) => {
@@ -78,7 +78,7 @@ export default function Addresses() {
   const deleteMutation = useMutation({
     mutationFn: deleteAddress,
     onSuccess: () => {
-      queryClient.invalidateQueries(['userAddresses']);
+      queryClient.invalidateQueries({ queryKey: ['userAddresses'] });
       setDeleteConfirmId(null);
     },
   });
@@ -86,7 +86,7 @@ export default function Addresses() {
   const setDefaultMutation = useMutation({
     mutationFn: setDefaultAddress,
     onSuccess: () => {
-      queryClient.invalidateQueries(['userAddresses']);
+      queryClient.invalidateQueries({ queryKey: ['userAddresses'] });
     },
   });
 

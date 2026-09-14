@@ -5,6 +5,8 @@ import { Leaf, Lock, Mail, ArrowRight, AlertCircle, ShoppingBag, RefreshCw, KeyR
 import { loginUser, resendOtpApi } from '../services/authApi';
 import { useAuthStore } from '../store/authStore';
 
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
 export default function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -65,12 +67,38 @@ export default function Login() {
     setErrorMessage('');
     setResendStatus('');
 
-    if (!formData.email || !formData.password) {
+    const cleanEmail = formData.email.trim();
+    const cleanPassword = formData.password;
+
+    if (!cleanEmail || !cleanPassword) {
       setErrorMessage('Please fill in both email and password.');
       return;
     }
 
-    loginMutation.mutate(formData);
+    if (cleanEmail.length > 100) {
+      setErrorMessage('Email address cannot exceed 100 characters.');
+      return;
+    }
+
+    if (!EMAIL_REGEX.test(cleanEmail)) {
+      setErrorMessage('Please enter a valid email address.');
+      return;
+    }
+
+    if (cleanPassword.length < 6) {
+      setErrorMessage('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (cleanPassword.length > 128) {
+      setErrorMessage('Password cannot exceed 128 characters.');
+      return;
+    }
+
+    loginMutation.mutate({
+      email: cleanEmail,
+      password: cleanPassword,
+    });
   };
 
   const handleResend = () => {
@@ -189,6 +217,7 @@ export default function Login() {
                   type="email"
                   name="os_login_email"
                   required
+                  maxLength={100}
                   readOnly
                   onFocus={(e) => { e.target.readOnly = false; }}
                   placeholder="name@example.com"
@@ -218,6 +247,7 @@ export default function Login() {
                   type="password"
                   name="os_login_password"
                   required
+                  maxLength={128}
                   readOnly
                   onFocus={(e) => { e.target.readOnly = false; }}
                   placeholder="••••••••"

@@ -94,25 +94,51 @@ export default function Signup() {
     e.preventDefault();
     setErrorMessage('');
 
-    if (!formData.name.trim() || !formData.email.trim() || !formData.password) {
+    const cleanName = formData.name.trim();
+    const cleanEmail = formData.email.trim().toLowerCase();
+    const cleanPhone = formData.phone ? formData.phone.trim() : '';
+    const cleanPassword = formData.password;
+
+    if (!cleanName || !cleanEmail || !cleanPassword) {
       setErrorMessage('Full name, email address, and password are required.');
       return;
     }
 
-    const cleanEmail = formData.email.trim().toLowerCase();
+    if (cleanName.length < 2 || cleanName.length > 60) {
+      setErrorMessage('Full name must be between 2 and 60 characters.');
+      return;
+    }
+
+    if (cleanEmail.length > 100) {
+      setErrorMessage('Email address cannot exceed 100 characters.');
+      return;
+    }
+
     if (!EMAIL_REGEX.test(cleanEmail)) {
       setErrorMessage('Please enter a valid email format (e.g. name@example.com).');
       return;
     }
 
-    if (formData.password.length < 6) {
+    if (cleanPhone && cleanPhone.length > 20) {
+      setErrorMessage('Phone number cannot exceed 20 characters.');
+      return;
+    }
+
+    if (cleanPassword.length < 6) {
       setErrorMessage('Password must be at least 6 characters long.');
       return;
     }
 
+    if (cleanPassword.length > 128) {
+      setErrorMessage('Password cannot exceed 128 characters.');
+      return;
+    }
+
     registerMutation.mutate({
-      ...formData,
+      name: cleanName,
       email: cleanEmail,
+      phone: cleanPhone,
+      password: cleanPassword,
     });
   };
 
@@ -306,6 +332,7 @@ export default function Signup() {
                     type="text"
                     name="os_customer_name"
                     required
+                    maxLength={60}
                     readOnly
                     onFocus={(e) => { e.target.readOnly = false; }}
                     placeholder="Ahmad Ali"
@@ -327,6 +354,7 @@ export default function Signup() {
                     type="email"
                     name="os_customer_email"
                     required
+                    maxLength={100}
                     readOnly
                     onFocus={(e) => { e.target.readOnly = false; }}
                     placeholder="name@example.com"
@@ -350,6 +378,7 @@ export default function Signup() {
                   <input
                     type="tel"
                     name="os_customer_phone"
+                    maxLength={20}
                     readOnly
                     onFocus={(e) => { e.target.readOnly = false; }}
                     placeholder="+92 300 1234567"
@@ -371,6 +400,7 @@ export default function Signup() {
                     type="password"
                     name="os_customer_password"
                     required
+                    maxLength={128}
                     readOnly
                     onFocus={(e) => { e.target.readOnly = false; }}
                     placeholder="At least 6 characters"

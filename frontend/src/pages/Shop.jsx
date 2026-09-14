@@ -20,6 +20,7 @@ export default function Shop() {
     mutationFn: addToCart,
     onSuccess: (updatedCart) => {
       queryClient.setQueryData(['cart'], updatedCart);
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
       openDrawer();
     },
   });

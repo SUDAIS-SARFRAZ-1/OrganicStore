@@ -47,8 +47,8 @@ export default function Orders() {
   const statusMutation = useMutation({
     mutationFn: updateOrderStatus,
     onSuccess: () => {
-      queryClient.invalidateQueries(['adminOrders']);
-      queryClient.invalidateQueries(['adminDashboardStats']);
+      queryClient.invalidateQueries({ queryKey: ['adminOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['adminDashboardStats'] });
     },
     onError: (err) => {
       setDialogConfig({

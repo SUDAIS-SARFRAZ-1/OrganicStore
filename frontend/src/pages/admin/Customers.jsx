@@ -38,7 +38,7 @@ export default function Customers() {
         variant: 'success',
         confirmText: 'Done',
       });
-      queryClient.invalidateQueries(['adminCustomers']);
+      queryClient.invalidateQueries({ queryKey: ['adminCustomers'] });
     },
     onError: (err) => {
       setDialogConfig({

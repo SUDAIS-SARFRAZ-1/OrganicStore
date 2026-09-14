@@ -8,6 +8,8 @@ import {
   X, 
   AlertCircle, 
   ChevronDown,
+  Sparkles,
+  CheckCircle2,
 } from 'lucide-react';
 import { getAdminCoupons, createCoupon, deleteCoupon } from '../../services/adminApi';
 
@@ -30,16 +32,23 @@ export default function Coupons() {
   };
   const [formData, setFormData] = useState(initialForm);
 
-  const { data: coupons = [], isLoading, isError, error } = useQuery({
+  const { data: responseData, isLoading, isError, error } = useQuery({
     queryKey: ['adminCoupons'],
     queryFn: getAdminCoupons,
   });
 
+  const coupons = Array.isArray(responseData) ? responseData : (responseData?.coupons || []);
+  const stats = responseData?.stats || {
+    totalCoupons: coupons.length,
+    activeCount: coupons.filter(c => c.isPublic).length,
+    totalRedemptions: coupons.reduce((acc, c) => acc + (c.timesUsed ?? c.usedCount ?? 0), 0),
+  };
+
   const createMutation = useMutation({
     mutationFn: createCoupon,
     onSuccess: () => {
-      queryClient.invalidateQueries(['adminCoupons']);
-      queryClient.invalidateQueries(['publicCoupons']);
+      queryClient.invalidateQueries({ queryKey: ['adminCoupons'] });
+      queryClient.invalidateQueries({ queryKey: ['publicCoupons'] });
       closeModal();
     },
     onError: (err) => {
@@ -50,8 +59,8 @@ export default function Coupons() {
   const deleteMutation = useMutation({
     mutationFn: deleteCoupon,
     onSuccess: () => {
-      queryClient.invalidateQueries(['adminCoupons']);
-      queryClient.invalidateQueries(['publicCoupons']);
+      queryClient.invalidateQueries({ queryKey: ['adminCoupons'] });
+      queryClient.invalidateQueries({ queryKey: ['publicCoupons'] });
       setDeleteConfirmId(null);
     },
   });
@@ -87,7 +96,9 @@ export default function Coupons() {
       minOrderAmount: formData.minOrderAmount ? parseFloat(formData.minOrderAmount) : 0,
       maxDiscountAmount: formData.maxDiscountAmount ? parseFloat(formData.maxDiscountAmount) : null,
       usageLimit: formData.usageLimit ? parseInt(formData.usageLimit, 10) : null,
-      expiresAt: formData.expiresAt ? new Date(formData.expiresAt).toISOString() : null,
+      expiresAt: formData.expiresAt 
+        ? (formData.expiresAt.includes('T') ? new Date(formData.expiresAt).toISOString() : new Date(`${formData.expiresAt}T23:59:59.999Z`).toISOString())
+        : null,
       isPublic: formData.isPublic,
     };
 
@@ -118,6 +129,39 @@ export default function Coupons() {
         </button>
       </div>
 
+      {/* Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+            <Tag className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Coupons</div>
+            <div className="text-lg font-black text-gray-900">{stats.totalCoupons ?? coupons.length}</div>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-green-50 text-[#6a9739] flex items-center justify-center font-bold">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Public Available</div>
+            <div className="text-lg font-black text-[#6a9739]">{stats.activeCount ?? 0}</div>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Redemptions</div>
+            <div className="text-lg font-black text-gray-900">{stats.totalRedemptions ?? 0}</div>
+          </div>
+        </div>
+      </div>
+
       {/* Coupons Table */}
       <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
         {isLoading ? (
@@ -142,7 +186,7 @@ export default function Coupons() {
                   <th className="py-3.5 px-4">Discount</th>
                   <th className="py-3.5 px-4">Min. Spend</th>
                   <th className="py-3.5 px-4">Visibility</th>
-                  <th className="py-3.5 px-4">Usage</th>
+                  <th className="py-3.5 px-4">Times Used</th>
                   <th className="py-3.5 px-4">Expires</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
@@ -182,7 +226,8 @@ export default function Coupons() {
                     </td>
 
                     <td className="py-3.5 px-4 text-gray-600 font-medium">
-                      {c.usedCount || 0} {c.usageLimit ? `/ ${c.usageLimit}` : 'uses'}
+                      <span className="font-bold text-gray-900">{c.timesUsed ?? c.usedCount ?? 0}</span>
+                      <span className="text-gray-400"> {c.usageLimit ? `/ ${c.usageLimit} uses` : 'uses (Unlimited)'}</span>
                     </td>
 
                     <td className="py-3.5 px-4 text-gray-500">

@@ -29,7 +29,7 @@ export default function Reviews() {
   const toggleMutation = useMutation({
     mutationFn: toggleReviewStatus,
     onSuccess: () => {
-      queryClient.invalidateQueries(['adminReviews']);
+      queryClient.invalidateQueries({ queryKey: ['adminReviews'] });
     },
     onError: (err) => {
       setDialogConfig({
@@ -46,9 +46,9 @@ export default function Reviews() {
   const featureMutation = useMutation({
     mutationFn: featureReviewAsTestimonial,
     onSuccess: () => {
-      queryClient.invalidateQueries(['adminReviews']);
-      queryClient.invalidateQueries(['homeTestimonials']);
-      queryClient.invalidateQueries(['testimonials']);
+      queryClient.invalidateQueries({ queryKey: ['adminReviews'] });
+      queryClient.invalidateQueries({ queryKey: ['homeTestimonials'] });
+      queryClient.invalidateQueries({ queryKey: ['testimonials'] });
     },
     onError: (err) => {
       setDialogConfig({
@@ -65,9 +65,9 @@ export default function Reviews() {
   const deleteMutation = useMutation({
     mutationFn: deleteReview,
     onSuccess: () => {
-      queryClient.invalidateQueries(['adminReviews']);
-      queryClient.invalidateQueries(['homeTestimonials']);
-      queryClient.invalidateQueries(['testimonials']);
+      queryClient.invalidateQueries({ queryKey: ['adminReviews'] });
+      queryClient.invalidateQueries({ queryKey: ['homeTestimonials'] });
+      queryClient.invalidateQueries({ queryKey: ['testimonials'] });
       setDeleteConfirmId(null);
     },
     onError: (err) => {

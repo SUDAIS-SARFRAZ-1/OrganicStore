@@ -35,6 +35,31 @@ export default function Cart() {
 
   const updateMutation = useMutation({
     mutationFn: updateCartItem,
+    onMutate: async ({ itemId, quantity }) => {
+      await queryClient.cancelQueries({ queryKey: ['cart'] });
+      const previousCart = queryClient.getQueryData(['cart']);
+      if (previousCart?.items) {
+        const updatedItems = previousCart.items.map((i) =>
+          i.id === itemId
+            ? { ...i, quantity, subtotal: (Number(i.unitPrice) || Number(i.price)) * quantity }
+            : i
+        );
+        const nextSubtotal = updatedItems.reduce((sum, i) => sum + i.quantity * Number(i.unitPrice), 0);
+        const nextTotalItems = updatedItems.reduce((sum, i) => sum + i.quantity, 0);
+        queryClient.setQueryData(['cart'], {
+          ...previousCart,
+          items: updatedItems,
+          subtotal: nextSubtotal,
+          totalItems: nextTotalItems,
+        });
+      }
+      return { previousCart };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousCart) {
+        queryClient.setQueryData(['cart'], context.previousCart);
+      }
+    },
     onSuccess: (updatedCart) => {
       queryClient.setQueryData(['cart'], updatedCart);
       // Re-validate applied coupon against new subtotal
@@ -42,15 +67,43 @@ export default function Cart() {
         handleValidateCoupon(appliedCoupon.code, updatedCart.subtotal);
       }
     },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
+    },
   });
 
   const removeMutation = useMutation({
     mutationFn: removeCartItem,
+    onMutate: async (arg) => {
+      const itemId = typeof arg === 'object' && arg !== null ? arg.itemId : arg;
+      await queryClient.cancelQueries({ queryKey: ['cart'] });
+      const previousCart = queryClient.getQueryData(['cart']);
+      if (previousCart?.items) {
+        const updatedItems = previousCart.items.filter((i) => i.id !== itemId);
+        const nextSubtotal = updatedItems.reduce((sum, i) => sum + i.quantity * Number(i.unitPrice), 0);
+        const nextTotalItems = updatedItems.reduce((sum, i) => sum + i.quantity, 0);
+        queryClient.setQueryData(['cart'], {
+          ...previousCart,
+          items: updatedItems,
+          subtotal: nextSubtotal,
+          totalItems: nextTotalItems,
+        });
+      }
+      return { previousCart };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousCart) {
+        queryClient.setQueryData(['cart'], context.previousCart);
+      }
+    },
     onSuccess: (updatedCart) => {
       queryClient.setQueryData(['cart'], updatedCart);
       if (appliedCoupon) {
         handleValidateCoupon(appliedCoupon.code, updatedCart.subtotal);
       }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
     },
   });
 
@@ -58,6 +111,7 @@ export default function Cart() {
     mutationFn: clearCart,
     onSuccess: (updatedCart) => {
       queryClient.setQueryData(['cart'], updatedCart);
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
       setAppliedCoupon(null);
       setCouponSuccess('');
     },
@@ -185,19 +239,19 @@ export default function Cart() {
                 {items.map((item) => (
                   <div
                     key={item.id}
-                    className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-200 animate-fade-slide-in"
                   >
                     {/* Product Media & Title */}
                     <div className="flex items-center gap-4 flex-1 min-w-0">
                       <Link
                         to={`/product/${item.slug}`}
-                        className="w-20 h-20 rounded-xl bg-gray-50 border border-gray-100 shrink-0 overflow-hidden"
+                        className="w-20 h-20 rounded-xl bg-gray-50 border border-gray-100 shrink-0 overflow-hidden group/img"
                       >
                         {item.image ? (
                           <img
                             src={item.image}
                             alt={item.name}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-105"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-[#6a9739]">
@@ -249,13 +303,13 @@ export default function Cart() {
                             }
                           }}
                           disabled={updateMutation.isPending || removeMutation.isPending}
-                          className="p-2 text-gray-500 hover:text-gray-900 cursor-pointer disabled:opacity-40"
+                          className="p-2 text-gray-500 hover:text-gray-900 cursor-pointer disabled:opacity-40 btn-tactile"
                           aria-label="Decrease quantity"
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
 
-                        <span className="px-3 text-xs font-bold text-gray-900">
+                        <span className="px-3 text-xs font-bold text-gray-900 select-none">
                           {item.quantity}
                         </span>
 
@@ -272,7 +326,7 @@ export default function Cart() {
                             updateMutation.isPending ||
                             removeMutation.isPending
                           }
-                          className="p-2 text-gray-500 hover:text-gray-900 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="p-2 text-gray-500 hover:text-gray-900 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed btn-tactile"
                           aria-label="Increase quantity"
                         >
                           <Plus className="w-3.5 h-3.5" />
@@ -291,7 +345,7 @@ export default function Cart() {
                         type="button"
                         onClick={() => removeMutation.mutate(item.id)}
                         disabled={removeMutation.isPending}
-                        className="p-2 text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                        className="p-2 text-gray-400 hover:text-red-600 transition-all cursor-pointer btn-tactile hover:scale-110 active:scale-90"
                         aria-label={`Remove ${item.name}`}
                       >
                         <Trash2 className="w-4 h-4" />

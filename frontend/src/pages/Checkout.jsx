@@ -15,7 +15,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { getCart } from '../services/cartApi';
-import { createOrder } from '../services/orderApi';
+import { createOrder, cancelCustomerOrder } from '../services/orderApi';
 import { validateCoupon } from '../services/couponApi';
 import { createStripeCheckoutSession } from '../services/paymentApi';
 import { useAuthStore } from '../store/authStore';
@@ -57,7 +57,11 @@ export default function Checkout() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get('cancelled') === 'true') {
-      setErrorMessage('Online payment was cancelled. You can choose Cash on Delivery or retry Stripe checkout below.');
+      setErrorMessage('Online payment was cancelled. Your items are still in your cart. You can retry with Stripe or choose Cash on Delivery below.');
+      const cancelledOrderId = params.get('order_id');
+      if (cancelledOrderId) {
+        cancelCustomerOrder(cancelledOrderId).catch(() => {});
+      }
     }
   }, [location.search]);
 
@@ -78,17 +82,21 @@ export default function Checkout() {
   // Order placement mutation (Rule 5 & 25)
   const orderMutation = useMutation({
     mutationFn: createOrder,
+    onMutate: () => {
+      if (paymentMethod === 'STRIPE') {
+        setIsRedirectingToStripe(true);
+      }
+    },
     onSuccess: async (newOrder) => {
-      // Invalidate cart in React Query so cart badge resets to 0
-      queryClient.invalidateQueries({ queryKey: ['cart'] });
-
       if (paymentMethod === 'STRIPE') {
         try {
           setIsRedirectingToStripe(true);
           const sessionRes = await createStripeCheckoutSession(newOrder.id);
 
           if (sessionRes?.url) {
-            // Redirect to real Stripe hosted payment page
+            // Directly redirect to real Stripe hosted payment page
+            // Notice: We deliberately DO NOT clear/invalidate the cart here!
+            // Cart will be cleared when payment is verified on Stripe success in OrderSuccess.jsx.
             window.location.href = sessionRes.url;
             return;
           } else {
@@ -101,6 +109,8 @@ export default function Checkout() {
         }
       }
 
+      // COD payment: Invalidate cart now so cart badge resets to 0 and navigate to success
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
       navigate(`/order-success/${newOrder.orderNumber}`, { state: { order: newOrder } });
     },
     onError: (err) => {
@@ -157,6 +167,20 @@ export default function Checkout() {
       <div className="max-w-7xl mx-auto px-4 py-24 text-center">
         <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#6a9739] border-t-transparent"></div>
         <p className="mt-3 text-gray-500">Preparing your checkout...</p>
+      </div>
+    );
+  }
+
+  if (isRedirectingToStripe) {
+    return (
+      <div className="bg-[#f8f6f3] min-h-[70vh] flex items-center justify-center py-16">
+        <div className="max-w-md w-full mx-auto px-4 text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-[#6a9739] border-t-transparent mb-4"></div>
+          <h2 className="text-2xl font-bold text-gray-900">Connecting to Stripe...</h2>
+          <p className="text-xs text-gray-500 mt-2">
+            Redirecting to secure online checkout. Please do not refresh or leave this page.
+          </p>
+        </div>
       </div>
     );
   }
@@ -343,9 +367,9 @@ export default function Checkout() {
                   {/* Option 1: Cash on Delivery */}
                   <div
                     onClick={() => setPaymentMethod('COD')}
-                    className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+                    className={`p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer flex flex-col justify-between gap-3 btn-tactile active:scale-[0.98] ${
                       paymentMethod === 'COD'
-                        ? 'border-[#6a9739] bg-green-50/40 shadow-xs'
+                        ? 'border-[#6a9739] bg-green-50/40 shadow-xs ring-1 ring-[#6a9739]/30'
                         : 'border-gray-200 bg-white hover:border-gray-300'
                     }`}
                   >
@@ -357,13 +381,13 @@ export default function Checkout() {
                         <span className="text-[10px] text-gray-500 block mt-0.5">Pay at doorstep</span>
                       </div>
                       <div
-                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 ${
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 transition-all duration-200 ${
                           paymentMethod === 'COD'
-                            ? 'border-[#6a9739] bg-[#6a9739]'
+                            ? 'border-[#6a9739] bg-[#6a9739] scale-105'
                             : 'border-gray-300 bg-white'
                         }`}
                       >
-                        {paymentMethod === 'COD' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        {paymentMethod === 'COD' && <div className="w-1.5 h-1.5 rounded-full bg-white animate-badge-pop" />}
                       </div>
                     </div>
                     <p className="text-[11px] text-gray-600 leading-relaxed">
@@ -374,9 +398,9 @@ export default function Checkout() {
                   {/* Option 2: Online Payment (Stripe) */}
                   <div
                     onClick={() => setPaymentMethod('STRIPE')}
-                    className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+                    className={`p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer flex flex-col justify-between gap-3 btn-tactile active:scale-[0.98] ${
                       paymentMethod === 'STRIPE'
-                        ? 'border-[#6a9739] bg-green-50/40 shadow-xs'
+                        ? 'border-[#6a9739] bg-green-50/40 shadow-xs ring-1 ring-[#6a9739]/30'
                         : 'border-gray-200 bg-white hover:border-gray-300'
                     }`}
                   >
@@ -391,13 +415,13 @@ export default function Checkout() {
                         <span className="text-[10px] text-gray-500 block mt-0.5">Debit / Credit Card</span>
                       </div>
                       <div
-                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 ${
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 transition-all duration-200 ${
                           paymentMethod === 'STRIPE'
-                            ? 'border-[#6a9739] bg-[#6a9739]'
+                            ? 'border-[#6a9739] bg-[#6a9739] scale-105'
                             : 'border-gray-300 bg-white'
                         }`}
                       >
-                        {paymentMethod === 'STRIPE' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        {paymentMethod === 'STRIPE' && <div className="w-1.5 h-1.5 rounded-full bg-white animate-badge-pop" />}
                       </div>
                     </div>
                     <p className="text-[11px] text-gray-600 leading-relaxed">
@@ -408,7 +432,7 @@ export default function Checkout() {
 
                 {/* Stripe Hosted Checkout Notice when STRIPE is selected */}
                 {paymentMethod === 'STRIPE' && (
-                  <div className="mt-4 p-5 rounded-xl border border-blue-200 bg-linear-to-b from-blue-50/60 to-white space-y-3.5">
+                  <div className="mt-4 p-5 rounded-xl border border-blue-200 bg-linear-to-b from-blue-50/60 to-white space-y-3.5 animate-fade-slide-in">
                     <div className="flex items-center justify-between gap-2 border-b border-blue-100 pb-3">
                       <div className="flex items-center gap-2">
                         <CreditCard className="w-4 h-4 text-blue-600" />
@@ -581,7 +605,7 @@ export default function Checkout() {
                 <button
                   type="submit"
                   disabled={orderMutation.isPending || isRedirectingToStripe}
-                  className="w-full py-3.5 px-6 bg-[#6a9739] hover:bg-[#58802d] text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full py-3.5 px-6 bg-[#6a9739] hover:bg-[#58802d] text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer text-sm disabled:opacity-50 flex items-center justify-center gap-2 btn-tactile active:scale-[0.98]"
                 >
                   {orderMutation.isPending || isRedirectingToStripe ? (
                     <>
