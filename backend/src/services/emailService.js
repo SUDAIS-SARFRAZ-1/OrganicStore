@@ -16,30 +16,43 @@ function getTransporter() {
   const emailPass = (process.env.EMAIL_PASS || process.env.SMTP_PASS || '').trim();
   const host = (process.env.SMTP_HOST || '').trim();
   const port = Number(process.env.SMTP_PORT) || 587;
-  const service = (process.env.EMAIL_SERVICE || 'gmail').trim();
 
   const cleanPass = emailPass.replace(/\s+/g, '');
 
-  if (emailUser && cleanPass && !host) {
-    // Service-based transport (Gmail with Google App Password)
-    transporter = nodemailer.createTransport({
-      service,
-      auth: {
-        user: emailUser,
-        pass: cleanPass,
-      },
-    });
-  } else if (host && emailUser && emailPass) {
-    // Custom SMTP server (e.g., Brevo, SendGrid, Mailgun, AWS SES)
-    transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure: port === 465,
-      auth: {
-        user: emailUser,
-        pass: emailPass,
-      },
-    });
+  if (emailUser && cleanPass) {
+    if (host) {
+      // Custom SMTP server (e.g., Brevo, SendGrid, Mailgun, AWS SES, Resend)
+      transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure: port === 465,
+        auth: {
+          user: emailUser,
+          pass: cleanPass,
+        },
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 20000,
+      });
+    } else {
+      // Default to smtp.gmail.com on port 587 (STARTTLS)
+      // Using explicit host & port 587 with STARTTLS is far more reliable on cloud environments (like Render) than service: 'gmail'
+      transporter = nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false, // port 587 uses STARTTLS
+        auth: {
+          user: emailUser,
+          pass: cleanPass,
+        },
+        tls: {
+          rejectUnauthorized: false,
+        },
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 20000,
+      });
+    }
   } else {
     // Fallback development transporter
     transporter = {
@@ -58,7 +71,7 @@ function getTransporter() {
           console.log(`>> PASSWORD RESET URL: ${mailOptions.resetUrl}`);
         }
         console.log('NOTE: To deliver real emails directly into user inboxes, configure:');
-        console.log('EMAIL_USER and EMAIL_PASS in backend/.env');
+        console.log('EMAIL_USER and EMAIL_PASS in Render Environment Variables or backend/.env');
         console.log('====================================================================\n');
         return { messageId: `dev-simulated-${Date.now()}` };
       },
@@ -66,6 +79,49 @@ function getTransporter() {
   }
 
   return transporter;
+}
+
+/**
+ * Diagnostic tool to check SMTP credentials and server connectivity
+ */
+async function verifyEmailConnection() {
+  const emailUser = (process.env.EMAIL_USER || process.env.SMTP_USER || '').trim();
+  const emailPass = (process.env.EMAIL_PASS || process.env.SMTP_PASS || '').trim();
+
+  if (!emailUser || !emailPass) {
+    return {
+      configured: false,
+      status: 'missing_credentials',
+      message: 'EMAIL_USER or EMAIL_PASS environment variables are missing in this environment. In production on Render, you MUST add EMAIL_USER and EMAIL_PASS to the Render dashboard Environment Variables.',
+    };
+  }
+
+  const activeTransporter = getTransporter();
+  if (activeTransporter.isDev) {
+    return {
+      configured: false,
+      status: 'dev_simulation',
+      message: 'Email service is running in simulation mode.',
+    };
+  }
+
+  try {
+    await activeTransporter.verify();
+    return {
+      configured: true,
+      status: 'connected',
+      user: emailUser,
+      message: 'SMTP transport verified and ready to deliver real emails.',
+    };
+  } catch (err) {
+    return {
+      configured: true,
+      status: 'error',
+      user: emailUser,
+      error: err.message,
+      message: `Failed to connect to SMTP server: ${err.message}`,
+    };
+  }
 }
 
 /**
@@ -353,5 +409,6 @@ module.exports = {
   sendVerificationEmail,
   sendContactEmail,
   sendPasswordResetEmail,
+  verifyEmailConnection,
 };
 

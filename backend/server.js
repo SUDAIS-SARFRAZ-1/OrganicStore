@@ -105,6 +105,16 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Email Service Diagnostic Health Check
+app.get('/api/health/email', async (req, res) => {
+  const { verifyEmailConnection } = require('./src/services/emailService');
+  const result = await verifyEmailConnection();
+  return res.status(result.status === 'connected' ? 200 : (result.configured ? 502 : 200)).json({
+    success: result.status === 'connected',
+    ...result,
+  });
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/categories', categoryRoutes);
@@ -132,6 +142,20 @@ const server = app.listen(PORT, async () => {
     await bootstrapAdmin();
   } catch (err) {
     console.error('Failed to bootstrap admin account:', err.message);
+  }
+
+  try {
+    const { verifyEmailConnection } = require('./src/services/emailService');
+    const emailCheck = await verifyEmailConnection();
+    if (emailCheck.status === 'connected') {
+      console.log(`[EMAIL SERVICE] Connected to SMTP successfully (${emailCheck.user})`);
+    } else if (!emailCheck.configured) {
+      console.warn(`[EMAIL SERVICE] WARNING: ${emailCheck.message}`);
+    } else {
+      console.error(`[EMAIL SERVICE] ERROR: ${emailCheck.message}`);
+    }
+  } catch (err) {
+    console.warn('[EMAIL SERVICE] Startup check notice:', err.message);
   }
 });
 

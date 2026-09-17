@@ -40,7 +40,8 @@ async function verifyEmailDomainMx(domain) {
           const aRecords = await dns.promises.resolve(domain);
           if (Array.isArray(aRecords) && aRecords.length > 0) return true;
         } catch {
-          return false;
+          // If DNS resolution fails on container network, fail-open to avoid blocking shoppers
+          return true;
         }
       }
       return false;
