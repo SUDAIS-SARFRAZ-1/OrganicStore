@@ -72,10 +72,11 @@ function generateTokenAndSetCookie(res, user) {
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 
+  const isProd = process.env.NODE_ENV === 'production';
   const cookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax', // Use lax for standard first-party store sessions (Item 5 & Lower gaps)
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax', // Use 'none' with secure in production for cross-site Render deployments
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     path: '/',
   };
@@ -348,8 +349,8 @@ async function verifyOtp(req, res, next) {
       },
     });
 
-    // Authenticate session via HTTP-only cookie
-    generateTokenAndSetCookie(res, updatedUser);
+    // Authenticate session via HTTP-only cookie and bearer token
+    const token = generateTokenAndSetCookie(res, updatedUser);
 
     const { tokenVersion, ...safeUser } = updatedUser;
 
@@ -357,6 +358,7 @@ async function verifyOtp(req, res, next) {
       success: true,
       message: 'Account verified successfully! Welcome to Organic Store.',
       user: safeUser,
+      token,
     });
   } catch (error) {
     next(error);
@@ -502,12 +504,13 @@ async function login(req, res, next) {
     }
 
     const { passwordHash, tokenVersion, ...safeUser } = user;
-    generateTokenAndSetCookie(res, user);
+    const token = generateTokenAndSetCookie(res, user);
 
     return res.status(200).json({
       success: true,
       message: 'Login successful.',
       user: safeUser,
+      token,
     });
   } catch (error) {
     next(error);
@@ -519,10 +522,11 @@ async function login(req, res, next) {
  * Log out current session by clearing HTTP-only cookie
  */
 function logout(req, res) {
+  const isProd = process.env.NODE_ENV === 'production';
   res.clearCookie('token', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
     path: '/',
   });
 
@@ -686,10 +690,11 @@ async function resetPassword(req, res, next) {
     });
 
     // Clear session cookie if any exists
+    const isProd = process.env.NODE_ENV === 'production';
     res.clearCookie('token', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       path: '/',
     });
 

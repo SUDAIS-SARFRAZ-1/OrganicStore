@@ -7,21 +7,21 @@ import { logoutUser } from '../services/authApi';
 /**
  * Zustand Auth Store (Client/UI State only - Rule 10)
  * Manages client user profile snapshot and UI authentication state.
- * SECURITY (Item 5): JWT tokens are NEVER stored in localStorage or Zustand.
- * Sessions are strictly HTTP-only, secure, sameSite cookies.
+ * Supports dual-channel session authentication (HTTP-only cookie + Bearer header fallback for cross-origin hosting).
  */
 export const useAuthStore = create(
   persist(
     (set) => ({
       user: null,
+      token: null,
       isAuthenticated: false,
 
-      // Accept user object (token parameter ignored for security - cookie-only sessions)
-      setAuth: (user) =>
-        set({
+      setAuth: (user, token) =>
+        set((state) => ({
           user: user || null,
+          token: token !== undefined ? (token || null) : state.token,
           isAuthenticated: Boolean(user),
-        }),
+        })),
 
       updateUser: (updatedFields) =>
         set((state) => ({
@@ -49,6 +49,7 @@ export const useAuthStore = create(
         // 4. Reset auth state in memory and localStorage
         set({
           user: null,
+          token: null,
           isAuthenticated: false,
         });
       },
@@ -57,6 +58,7 @@ export const useAuthStore = create(
       name: 'organic_store_auth',
       partialize: (state) => ({
         user: state.user,
+        token: state.token,
         isAuthenticated: state.isAuthenticated,
       }),
     }

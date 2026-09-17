@@ -31,7 +31,7 @@ export default function Login() {
       queryClient.clear();
 
       // 2. Set new user auth state
-      setAuth(data.user);
+      setAuth(data.user, data.token);
 
       // 3. By default, both admin and customer navigate to the home page ('/')
       // Only redirect to checkout if the customer was actively in the checkout flow

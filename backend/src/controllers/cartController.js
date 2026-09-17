@@ -11,9 +11,14 @@ const { prisma } = require('../config/db');
  */
 async function resolveCart(req, res) {
   let cart = null;
-  // Security (Item 10): Only read from cryptographically signed HTTP-only cookie.
-  // Never accept client-supplied x-cart-id header or unsigned cookies.
-  const guestCartId = req.signedCookies && req.signedCookies.guest_cart_id;
+  // Dual-channel guest cart resolution: supports x-cart-id header + signed/unsigned cookies.
+  // This guarantees bulletproof persistence on mobile Safari, Chrome, and cross-origin deployments.
+  const rawHeaderCartId = req.headers['x-cart-id'] || req.headers['x-guest-cart-token'];
+  const headerCartId = typeof rawHeaderCartId === 'string' && rawHeaderCartId.trim().length > 0 ? rawHeaderCartId.trim() : null;
+  const cookieCartId = (req.signedCookies && req.signedCookies.guest_cart_id) || (req.cookies && req.cookies.guest_cart_id) || null;
+  const guestCartId = headerCartId || cookieCartId;
+
+  const isProd = process.env.NODE_ENV === 'production';
 
   if (req.user) {
     // 1. Authenticated customer cart
@@ -27,7 +32,7 @@ async function resolveCart(req, res) {
       });
     }
 
-    // Check if there was a legitimate signed guest cart that should be merged
+    // Check if there was a legitimate guest cart that should be merged
     if (guestCartId && guestCartId !== cart.id) {
       const guestCart = await prisma.cart.findFirst({
         where: { id: guestCartId, userId: null },
@@ -67,14 +72,17 @@ async function resolveCart(req, res) {
           await tx.cart.delete({ where: { id: guestCart.id } });
         });
 
-        // Clear guest cookie
+        // Clear guest cookie and reset x-cart-id header
         if (res.clearCookie) {
           res.clearCookie('guest_cart_id', {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+            secure: isProd,
+            sameSite: isProd ? 'none' : 'lax',
             path: '/',
           });
+        }
+        if (res.setHeader) {
+          res.setHeader('x-cart-id', '');
         }
       }
     }
@@ -90,17 +98,21 @@ async function resolveCart(req, res) {
       cart = await prisma.cart.create({
         data: { userId: null },
       });
+    }
 
-      if (res.cookie) {
-        res.cookie('guest_cart_id', cart.id, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-          signed: true, // Signed cookie prevents tampering and UUID enumeration
-          maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-          path: '/',
-        });
-      }
+    if (res.cookie) {
+      res.cookie('guest_cart_id', cart.id, {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: isProd ? 'none' : 'lax',
+        signed: true,
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        path: '/',
+      });
+    }
+
+    if (res.setHeader) {
+      res.setHeader('x-cart-id', cart.id);
     }
   }
 
@@ -208,6 +220,7 @@ async function getCart(req, res, next) {
     return res.status(200).json({
       success: true,
       cart: cartData,
+      guestCartId: req.user ? null : cart.id,
     });
   } catch (error) {
     next(error);
@@ -299,6 +312,7 @@ async function addToCart(req, res, next) {
       success: true,
       message: `Added "${product.name}" to cart.`,
       cart: updatedCart,
+      guestCartId: req.user ? null : cart.id,
     });
   } catch (error) {
     next(error);
@@ -358,6 +372,7 @@ async function updateCartItem(req, res, next) {
     return res.status(200).json({
       success: true,
       cart: updatedCart,
+      guestCartId: req.user ? null : cart.id,
     });
   } catch (error) {
     next(error);
@@ -383,6 +398,7 @@ async function removeCartItem(req, res, next) {
         success: true,
         message: 'Item has already been removed from cart.',
         cart: updatedCart,
+        guestCartId: req.user ? null : cart.id,
       });
     }
 
@@ -394,6 +410,7 @@ async function removeCartItem(req, res, next) {
       success: true,
       message: 'Item removed from cart.',
       cart: updatedCart,
+      guestCartId: req.user ? null : cart.id,
     });
   } catch (error) {
     next(error);
@@ -418,6 +435,7 @@ async function clearCart(req, res, next) {
       success: true,
       message: 'Cart cleared.',
       cart: updatedCart,
+      guestCartId: req.user ? null : cart.id,
     });
   } catch (error) {
     next(error);

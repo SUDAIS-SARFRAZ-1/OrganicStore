@@ -35,17 +35,57 @@ app.use(
   })
 );
 
+// Trust reverse proxy (Render / Cloudflare / Nginx load balancers)
+app.set('trust proxy', 1);
+
 // Allowed CORS origins
-const allowedOrigins = [
-  process.env.FRONTEND_URL || 'https://organicstore-1.onrender.com',
+const rawFrontendUrl = process.env.FRONTEND_URL || '';
+const configuredOrigins = rawFrontendUrl
+  .split(',')
+  .map((url) => url.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
+const defaultOrigins = [
+  'https://organicstore-1.onrender.com',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://localhost:4173',
 ];
 
-app.use(cors({
-  origin: ['https://organicstore-1.onrender.com'],
-  credentials: true
-}));
+const allowedOrigins = Array.from(new Set([...configuredOrigins, ...defaultOrigins]));
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, uptime/health check monitors, direct navigation)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      const normalizedOrigin = origin.trim().replace(/\/+$/, '');
+
+      if (allowedOrigins.includes(normalizedOrigin)) {
+        return callback(null, true);
+      }
+
+      // Allow any onrender.com origin if frontend is hosted on Render or Vercel/Netlify preview
+      if (
+        normalizedOrigin.endsWith('.onrender.com') ||
+        normalizedOrigin.endsWith('.vercel.app') ||
+        normalizedOrigin.endsWith('.netlify.app')
+      ) {
+        return callback(null, true);
+      }
+
+      return callback(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-cart-id', 'x-guest-cart-token'],
+    exposedHeaders: ['x-cart-id'],
+  })
+);
 
 // Webhook raw body parser for Stripe signature verification
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));

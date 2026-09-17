@@ -60,7 +60,7 @@ export default function Signup() {
     mutationFn: verifyOtpApi,
     onSuccess: (data) => {
       if (data?.user) {
-        setAuth(data.user);
+        setAuth(data.user, data.token);
         try {
           queryClient.invalidateQueries();
         } catch {

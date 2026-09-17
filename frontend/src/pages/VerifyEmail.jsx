@@ -32,7 +32,7 @@ export default function VerifyEmail() {
     mutationFn: (tok) => verifyEmailApi({ token: tok }),
     onSuccess: (data) => {
       if (data?.user) {
-        setAuth(data.user);
+        setAuth(data.user, data.token);
         queryClient.invalidateQueries({ queryKey: ['cart'] });
         navigate('/', { replace: true });
       }
@@ -43,7 +43,7 @@ export default function VerifyEmail() {
     mutationFn: verifyOtpApi,
     onSuccess: (data) => {
       if (data?.user) {
-        setAuth(data.user);
+        setAuth(data.user, data.token);
         queryClient.invalidateQueries({ queryKey: ['cart'] });
         navigate('/', { replace: true });
       }
