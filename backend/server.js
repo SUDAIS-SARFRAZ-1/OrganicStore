@@ -42,25 +42,10 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
 ];
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // In production, reject requests from browsers missing Origin header
-      if (!origin) {
-        if (process.env.NODE_ENV === 'production') {
-          return callback(new Error('Origin header required in production'));
-        }
-        return callback(null, true);
-      }
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Blocked by CORS policy'));
-      }
-    },
-    credentials: true,
-  })
-);
+app.use(cors({
+  origin: ['https://organicstore-1.onrender.com'],
+  credentials: true
+}));
 
 // Webhook raw body parser for Stripe signature verification
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
