@@ -42,7 +42,7 @@ export default function MiniCartDrawer() {
     },
     onSuccess: (updatedCart) => {
       queryClient.setQueryData(['cart'], updatedCart);
-      queryClient.invalidateQueries({ queryKey: ['cart'] });
+       
     },
   });
 
@@ -72,7 +72,7 @@ export default function MiniCartDrawer() {
     },
     onSuccess: (updatedCart) => {
       queryClient.setQueryData(['cart'], updatedCart);
-      queryClient.invalidateQueries({ queryKey: ['cart'] });
+       
     },
   });
 
