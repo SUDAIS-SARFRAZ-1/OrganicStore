@@ -102,16 +102,13 @@ export default function Cart() {
         handleValidateCoupon(appliedCoupon.code, updatedCart.subtotal);
       }
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['cart'] });
-    },
+    
   });
 
   const clearMutation = useMutation({
     mutationFn: clearCart,
     onSuccess: (updatedCart) => {
       queryClient.setQueryData(['cart'], updatedCart);
-      queryClient.invalidateQueries({ queryKey: ['cart'] });
       setAppliedCoupon(null);
       setCouponSuccess('');
     },
