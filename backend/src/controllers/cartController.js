@@ -72,7 +72,7 @@ async function resolveCart(req, res) {
           res.clearCookie('guest_cart_id', {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
             path: '/',
           });
         }
@@ -95,7 +95,7 @@ async function resolveCart(req, res) {
         res.cookie('guest_cart_id', cart.id, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
           signed: true, // Signed cookie prevents tampering and UUID enumeration
           maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
           path: '/',
